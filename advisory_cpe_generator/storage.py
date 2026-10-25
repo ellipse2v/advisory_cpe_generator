@@ -12,11 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-Output directory:
+Two directories:
 
-  <output_dir>/<vendor>/<vendor>_cve_YYYY_NNNN.json   one CSAF document per CVE
-  <output_dir>/<vendor>/index.txt, changes.csv        CSAF provider index files (section 7.1.13/7.1.14)
-  <output_dir>/.cache/<vendor>/<advisory>.json        parsed advisories, to rebuild without network
+  <download_dir>/<vendor>/          phase 1: the vendors' files as published
+      <advisory>.html|.json|.xml    one or more files per advisory
+      _list.*                       the advisory list the files were found in
+      manifest.json                 advisory id -> url, updated, files, details
+
+  <output_dir>/<vendor>/            phase 2: the generated CSAF documents
+      <vendor>_cve_YYYY_NNNN.json   one per CVE
+      index.txt, changes.csv        CSAF provider index files (section 7.1.13/7.1.14)
 
 A document is rewritten only when its content changes; tracking.version is
 then incremented and a revision_history entry added.
@@ -28,8 +33,6 @@ import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-
-from .model import Vulnerability
 
 
 def now_iso():
@@ -48,35 +51,54 @@ def safe_path(directory, filename):
     return target
 
 
-class Storage:
-    def __init__(self, output_dir):
-        self.root = Path(output_dir)
+class Downloads:
+    """Raw source files of each vendor, and what is known about each advisory."""
 
-    # -- advisory cache ------------------------------------------------------
+    MANIFEST = "manifest.json"
 
-    def _cache_dir(self, vendor):
-        d = self.root / ".cache" / vendor
+    def __init__(self, download_dir):
+        self.root = Path(download_dir)
+
+    def vendor_dir(self, vendor):
+        d = self.root / vendor
         d.mkdir(parents=True, exist_ok=True)
         return d
 
-    def cached_ids(self, vendor):
-        return {p.stem: json.loads(p.read_text(encoding="utf-8")).get("updated")
-                for p in self._cache_dir(vendor).glob("*.json")}
+    def manifest(self, vendor):
+        path = self.vendor_dir(vendor) / self.MANIFEST
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
-    def save_advisory(self, vendor, advisory_id, vulnerabilities, updated=None):
-        path = safe_path(self._cache_dir(vendor), f"{advisory_id}.json")
-        payload = {"advisory_id": advisory_id, "updated": updated,
-                   "vulnerabilities": [v.to_dict() for v in vulnerabilities]}
-        path.write_text(json.dumps(payload, indent=1, ensure_ascii=False), encoding="utf-8")
+    def _write_manifest(self, vendor, manifest):
+        path = self.vendor_dir(vendor) / self.MANIFEST
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(manifest, indent=1, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+        tmp.replace(path)   # an interrupted run keeps what it already downloaded
 
-    def load_vulnerabilities(self, vendor, cves=None):
-        """Every cached vulnerability of a vendor, optionally only some CVEs."""
-        out = []
-        for p in sorted(self._cache_dir(vendor).glob("*.json")):
-            for d in json.loads(p.read_text(encoding="utf-8"))["vulnerabilities"]:
-                if cves is None or d["cve"].upper() in cves:
-                    out.append(Vulnerability.from_dict(d))
-        return out
+    def save_file(self, vendor, name, data):
+        path = safe_path(self.vendor_dir(vendor), name)
+        path.write_bytes(data if isinstance(data, bytes) else data.encode("utf-8"))
+        return path
+
+    def save(self, vendor, advisory_id, files, url=None, updated=None, details=None):
+        """files: {file name: bytes}. An advisory with no file (e.g. no CSAF) is still recorded."""
+        names = [self.save_file(vendor, name, data).name for name, data in files.items()]
+        manifest = self.manifest(vendor)
+        manifest[advisory_id] = {"url": url, "updated": updated, "downloaded": now_iso(),
+                                 "files": names, **(details or {})}
+        self._write_manifest(vendor, manifest)
+
+    def entries(self, vendor):
+        """[(advisory id, manifest entry, [paths])] sorted by id."""
+        d = self.vendor_dir(vendor)
+        return [(adv_id, entry, [d / name for name in entry.get("files", [])])
+                for adv_id, entry in sorted(self.manifest(vendor).items())]
+
+
+class Storage:
+    """Output directory of the CSAF documents."""
+
+    def __init__(self, output_dir):
+        self.root = Path(output_dir)
 
     # -- CSAF documents ----------------------------------------------------
 

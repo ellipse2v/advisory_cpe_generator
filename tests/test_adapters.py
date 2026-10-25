@@ -23,7 +23,7 @@ from conftest import FIXTURES
 def test_stormshield_page(config):
     adapter = StormshieldAdapter(connector_config(config, "stormshield"))
     adv_id, vulns = adapter.parse_file(FIXTURES / "stormshield_2025-006.html",
-                                       products=["Stormshield Network VPN Client"])
+                                       {"products": ["Stormshield Network VPN Client"]})
     assert adv_id == "2025-006"
     [v] = vulns
     assert v.cve == "CVE-2025-11955"
@@ -103,7 +103,17 @@ class FakeHttp:
         return json.loads(self.pages[url])
 
 
-def test_stormshield_list_and_fetch(config):
+def fetch(adapter, ref, directory):
+    """Phase 1 then phase 2 on one advisory, as the pipeline does."""
+    vulns = []
+    for name, data in adapter.download(ref).items():
+        path = directory / name
+        path.write_bytes(data)
+        vulns += adapter.parse_file(path, {"url": ref.url, **ref.details})[1]
+    return vulns
+
+
+def test_stormshield_list_and_fetch(config, tmp_path):
     home = b"""<html><script>var advisories_list = [
         {ID: '2025-006', link: 'https://advisories.stormshield.eu/2025-006/',
          products: [['Stormshield Network VPN Client', 'vpn'],],},
@@ -114,19 +124,21 @@ def test_stormshield_list_and_fetch(config):
                          (FIXTURES / "stormshield_2025-006.html").read_bytes()})
     adapter = StormshieldAdapter(connector_config(config, "stormshield"), http=http)
     [ref] = adapter.list_advisories()
-    assert ref.extra["products"] == ["Stormshield Network VPN Client"]
-    [v] = adapter.fetch(ref)
+    assert ref.details["products"] == ["Stormshield Network VPN Client"]
+    assert adapter.listing == {"_list.html": home}
+    [v] = fetch(adapter, ref, tmp_path)
     assert v.products[0].version == "7.5.109"
 
 
-def test_paloalto_list_and_fetch(config):
+def test_paloalto_list_and_fetch(config, tmp_path):
     record = (FIXTURES / "pan_cve_2024_0012.json").read_text()
     http = FakeHttp({"https://security.paloaltonetworks.com/json": '[{"ID": "CVE-2024-0012", "updated": "2025-01-01"}]',
                      "https://security.paloaltonetworks.com/json/CVE-2024-0012": record})
     adapter = PaloAltoAdapter(connector_config(config, "paloalto"), http=http)
     [ref] = adapter.list_advisories()
-    [v] = adapter.fetch(ref)
+    [v] = fetch(adapter, ref, tmp_path)
     assert v.cve == "CVE-2024-0012"
+    assert (tmp_path / "CVE-2024-0012.json").read_text() == record   # saved as published
 
 
 def test_oracle_cpu_csaf(config):
@@ -143,7 +155,7 @@ def test_oracle_cpu_csaf(config):
     assert by_cve["CVE-2020-8908"].products[0].status == KNOWN_NOT_AFFECTED
 
 
-def test_oracle_list_and_fetch(config):
+def test_oracle_list_and_fetch(config, tmp_path):
     alerts = '<a href="/security-alerts/cpujul2026.html">July 2026</a><a href="/security-alerts/cpujul2026.html">x</a>'
     cpu = '<a href="https://www.oracle.com/docs/tech/security-alerts/cpujul2026csaf.json">CSAF</a>'
     http = FakeHttp({"https://www.oracle.com/security-alerts/": alerts,
@@ -153,7 +165,8 @@ def test_oracle_list_and_fetch(config):
     adapter = OracleAdapter(connector_config(config, "oracle"), http=http)
     [ref] = adapter.list_advisories()
     assert ref.id == "cpujul2026"
-    assert len(adapter.fetch(ref)) == 3
+    assert len(fetch(adapter, ref, tmp_path)) == 3
+    assert ref.details["csaf_url"].endswith("cpujul2026csaf.json")
 
 
 def test_cvrf_matches_csaf_of_same_advisory(config):
@@ -188,7 +201,7 @@ RSS = """<?xml version="1.0" encoding="UTF-8"?>
 </channel></rss>"""
 
 
-def test_fortinet_rss_prefers_csaf_then_cvrf(config):
+def test_fortinet_rss_prefers_csaf_then_cvrf(config, tmp_path):
     http = FakeHttp({
         "https://filestore.fortinet.com/fortiguard/rss/ir.xml": RSS,
         "https://filestore.fortinet.com/fortiguard/psirt/csaf_example_fg-ir-26-186.json":
@@ -197,6 +210,8 @@ def test_fortinet_rss_prefers_csaf_then_cvrf(config):
             (FIXTURES / "cisco-sa-20180328-smi2_cvrf.xml").read_bytes()})
     adapter = FortinetAdapter(connector_config(config, "fortinet"), http=http)
     a, b = adapter.list_advisories()
-    assert (a.id, a.extra["format"], a.updated) == ("FG-IR-26-186", "csaf", "2026-10-21")
-    assert (b.id, b.extra["format"]) == ("FG-IR-20-005", "cvrf")
-    assert adapter.fetch(a)[0].vendor == adapter.fetch(b)[0].vendor == "fortinet"
+    assert (a.id, a.details["format"], a.updated) == ("FG-IR-26-186", "csaf", "2026-10-21")
+    assert (b.id, b.details["format"]) == ("FG-IR-20-005", "cvrf")
+    assert list(adapter.download(a)) == ["FG-IR-26-186.json"]
+    assert list(adapter.download(b)) == ["FG-IR-20-005.xml"]
+    assert fetch(adapter, a, tmp_path)[0].vendor == fetch(adapter, b, tmp_path)[0].vendor == "fortinet"

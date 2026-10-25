@@ -25,6 +25,9 @@ import json
 from pathlib import Path
 
 DEFAULTS = {
+    # Phase 1 saves the vendors' files as published in <download_dir>/<vendor>/,
+    # phase 2 writes the CSAF documents with CPEs in <output_dir>/<vendor>/.
+    "download_dir": "download",
     "output_dir": "output",
     "publisher": {
         # CSAF publisher of the generated documents. "translator" is the CSAF
@@ -42,9 +45,12 @@ DEFAULTS = {
         "mapping_csv": "cpe_mapping.csv",
         # cpeMiniLLMLevenshtein checkout: its NVD cache (cpe_data.json.gz) and
         # cpe_aliases.csv are used for exact lookups, its matcher for the rest.
-        "matcher_path": "",
+        "matcher_path": "../cpeMiniLLMLevenshtein",
+        # Reuse a CPE the vendor gave for another version of the same product.
+        "use_examples": True,
         "use_dictionary": True,
-        "use_semantic_matcher": False,
+        # Skipped with a warning when sentence-transformers/torch are not installed.
+        "use_semantic_matcher": True,
         "min_score": 0.65,
         # Expand a version range into the versions the NVD dictionary lists.
         "expand_ranges": True,

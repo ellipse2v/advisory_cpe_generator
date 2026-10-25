@@ -5,9 +5,17 @@ Generates one **CSAF 2.0** document per vendor and CVE (`stormshield_cve_2025_11
 advisories, with a **CPE 2.3** identifier on every product version that can be identified.
 
 Only standard CSAF 2.0 fields are written; nothing is invented. A CPE either comes from
-the vendor's data, from a mapping you maintain, or from the NVD CPE dictionary. When none
-of these identifies the product, the product is written without a CPE and listed in
-`cpe_review.csv`.
+the vendor's data (for that version or, version replaced, for another version of the same
+product), from a mapping you maintain, from the NVD CPE dictionary or from the
+cpeMiniLLMLevenshtein matcher. When none of these identifies the product, the product is
+written without a CPE and listed in `cpe_review.csv`.
+
+A run has two phases, over every vendor:
+
+1. **download**: the vendors' advisories are saved as published (HTML, CSAF, CVE JSON,
+   CVRF) in `download/<vendor>/`. Only this phase uses the network.
+2. **enrich**: the downloaded files are parsed, CPEs are added and one CSAF document per
+   CVE is written in `output/<vendor>/`.
 
 | Vendor | Source | CPE in the source |
 |---|---|---|
@@ -23,22 +31,29 @@ of these identifies the product, the product is written without a CPE and listed
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 git clone https://github.com/ellipse2v/cpeMiniLLMLevenshtein ../cpeMiniLLMLevenshtein   # NVD dictionary
+pip install sentence-transformers torch    # LLM matcher (optional: skipped with a warning without it)
 cp config.example.json config.json
 ```
 
 ## Usage
 
 ```bash
-python -m advisory_cpe_generator --config config.json                      # enabled connectors
+python -m advisory_cpe_generator --config config.json                      # enabled connectors, both phases
+python -m advisory_cpe_generator --config config.json --step download      # phase 1 only
+python -m advisory_cpe_generator --config config.json --step enrich        # phase 2 only, no network, every CVE
 python -m advisory_cpe_generator --config config.json --vendor paloalto --since 7
 python -m advisory_cpe_generator --config config.json --vendor stormshield --max 5
-python -m advisory_cpe_generator --config config.json --rebuild            # no network, e.g. after editing cpe_mapping.csv
 python -m advisory_cpe_generator --config config.json --vendor cisco --file downloaded_csaf/*.json
 ```
 
-`--file` parses local files instead of fetching: Cisco, Oracle or Fortinet CSAF documents,
-Fortinet CVRF 1.2 files (`.xml`), or Palo Alto CVE JSON 5 records. (A saved Stormshield page lacks the product list, which is on the home page, so its
-CVEs are skipped.)
+A run downloads the advisories that are new or whose date changed (`--full`: all of them),
+then writes the documents of the CVEs they name. `--step enrich` rewrites every CVE from
+`download/`, e.g. after editing `cpe_mapping.csv` (unchanged documents are left as they are).
+
+`--file` copies local files into `download/<vendor>/` instead of downloading: Cisco, Oracle
+or Fortinet CSAF documents, Fortinet CVRF 1.2 files (`.xml`), or Palo Alto CVE JSON 5
+records. (A Stormshield page given alone lacks the product list, which is on the home page,
+so its CVEs are skipped.)
 
 Cisco needs openVuln API credentials in the environment (never in a file of the repository):
 
@@ -49,15 +64,21 @@ export CISCO_CLIENT_ID=... CISCO_CLIENT_SECRET=...
 ## Output
 
 ```
-output/
+download/                       # phase 1: as published
+├── stormshield/
+│   ├── 2025-006.html           # one file per advisory (.html, .json or .xml)
+│   ├── _list.html              # the list the advisories were found in
+│   └── manifest.json           # advisory -> url, date, files (and the Stormshield product list)
+├── cisco/ paloalto/ oracle/ fortinet/ ...
+output/                         # phase 2: CSAF with CPEs
 ├── stormshield/
 │   ├── stormshield_cve_2025_11955.json
-│   ├── index.txt          # CSAF provider index (section 7.1.13)
-│   └── changes.csv        # CSAF provider change list (section 7.1.14), newest first
-├── paloalto/ ...
-├── cisco/ ...
-└── .cache/<vendor>/<advisory>.json   # parsed advisories, used to rebuild without network
+│   ├── index.txt               # CSAF provider index (section 7.1.13)
+│   └── changes.csv             # CSAF provider change list (section 7.1.14), newest first
+└── cisco/ paloalto/ oracle/ fortinet/ ...
 ```
+
+Both directories are set in config.json (`download_dir`, `output_dir`).
 
 - One file per (vendor, CVE). When a vendor publishes several advisories for the same CVE,
   they are merged into one document; each advisory is a reference.
@@ -85,23 +106,32 @@ For every product version, in this order:
 
 1. **CPE from the source** (Palo Alto `cpes`, CSAF `product_identification_helper.cpe`), kept
    if it is a valid CPE 2.3 string.
-2. **`cpe_mapping.csv`**: `vendor,product,cpe_part,cpe_vendor,cpe_product`, for names the
+2. **Example from the vendor**: the vendor gave a CPE for another version of the same
+   product, in the same advisory or in another downloaded advisory of the vendor; it is
+   reused with the version replaced (PAN-OS fixed in *11.2.4-h1* →
+   `o:paloaltonetworks:pan-os:11.2.4:h1`, written as Palo Alto does: hotfix in the update
+   field). A product name the vendor published under two CPE products is not used.
+3. **`cpe_mapping.csv`**: `vendor,product,cpe_part,cpe_vendor,cpe_product`, for names the
    dictionary does not match exactly (e.g. *GlobalProtect App* → `paloaltonetworks:globalprotect`).
-3. **NVD dictionary, exact name**: the product name, with and without the vendor prefix and a
+4. **NVD dictionary, exact name**: the product name, with and without the vendor prefix and a
    trailing "Software", must equal an NVD product of the same vendor, and only one
    (*Cisco IOS XE Software* → `o:cisco:ios_xe`, *Stormshield Network Security* →
    `a:stormshield:stormshield_network_security`). Uses cpeMiniLLMLevenshtein's NVD cache and
    `cpe_aliases.csv` (vendor renames). The dictionary CPE is used when NVD lists the version,
    otherwise the version is substituted in the product's CPE.
-4. **Semantic matcher** (`use_semantic_matcher: true`, needs sentence-transformers):
-   cpeMiniLLMLevenshtein's `CPEMatcher`, accepted at `min_score` (0.65) or above.
-5. Otherwise no CPE, and a line in `cpe_review.csv`.
+5. **LLM matcher** (on by default, needs sentence-transformers and torch, otherwise skipped
+   with a warning): cpeMiniLLMLevenshtein's `CPEMatcher`, accepted at `min_score` (0.65) or
+   above; the CPE's version is the product's.
+6. Otherwise no CPE, and a line in `cpe_review.csv`.
 
 With `expand_ranges`, a range of a product identified in the NVD dictionary (and for which
 the source gave no CPE) is expanded into the versions NVD lists in that range, each with its
 own CPE.
 
-Loading the NVD dictionary takes ~25 s and ~850 MB, only when a product needs it.
+Loading the NVD dictionary takes ~25 s and ~850 MB, only when a product needs it; the LLM
+matcher loads its own copy and its model, so count about twice that when both are used.
+Each step can be turned off in config.json (`use_examples`, `use_dictionary`,
+`use_semantic_matcher`).
 
 ## config.json
 
@@ -126,7 +156,8 @@ pytest
 
 The tests run on real data, offline: a Stormshield advisory page, two Palo Alto CVE records
 (from CVEProject/cvelistV5), the OASIS Cisco example in CSAF and in CVRF 1.2, and an excerpt
-of Oracle's July 2026 CPU CSAF (3 CVEs). Every generated document is
+of Oracle's July 2026 CPU CSAF (3 CVEs). The two phases are tested with the network
+replaced by these files. Every generated document is
 validated against the CSAF 2.0 JSON schema (with the FIRST CVSS schemas).
 
 ### Vendor notes
@@ -150,8 +181,9 @@ These parts were written from the documentation without access to the live servi
 - Fortinet: the RSS feed, CSAF and CVRF files (the structure was read through a summarising
   web fetch, not downloaded). The CVRF reader is tested on the OASIS CVRF 1.2 example.
 
-Verified live: Oracle (the October 2026 CPU gives 1,739 documents, all valid against the
-CSAF schema, every product with Oracle's CPE).
+Verified live: Oracle, both phases (the October 2026 CPU is saved in `download/oracle/` and
+gives 1,739 documents, all valid against the CSAF schema, every product with Oracle's CPE;
+a second run leaves them unchanged).
 
 ## License
 

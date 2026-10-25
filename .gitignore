@@ -221,6 +221,7 @@ __marimo__/
 
 # advisory_cpe_generator
 config.json
+download/
 output/
 cpe_review.csv
 *.log

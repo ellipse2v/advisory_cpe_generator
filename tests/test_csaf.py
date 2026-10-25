@@ -26,7 +26,7 @@ from conftest import FIXTURES
 
 def _vulns(config):
     yield StormshieldAdapter(connector_config(config, "stormshield")).parse_file(
-        FIXTURES / "stormshield_2025-006.html", products=["Stormshield Network VPN Client"])[1][0]
+        FIXTURES / "stormshield_2025-006.html", {"products": ["Stormshield Network VPN Client"]})[1][0]
     for name in ("pan_cve_2024_0012.json", "pan_cve_2024_3400.json"):
         yield PaloAltoAdapter(connector_config(config, "paloalto")).parse_file(FIXTURES / name)[1][0]
     yield CiscoAdapter(connector_config(config, "cisco")).parse_file(

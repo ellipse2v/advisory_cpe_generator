@@ -59,7 +59,9 @@ class PaloAltoAdapter(Adapter):
     vendor_name = "Palo Alto Networks"
 
     def list_advisories(self, since=None):
-        data = self.http.get_json(self.cfg["list_url"])
+        raw = self.http.get(self.cfg["list_url"]).content
+        self.listing = {"_list.json": raw}
+        data = json.loads(raw)
         items = data if isinstance(data, list) else data.get("advisories") or data.get("data") or []
         refs = []
         for item in items:
@@ -72,16 +74,20 @@ class PaloAltoAdapter(Adapter):
             updated = _first(item, "updated", "dateUpdated", "cveMetadata.dateUpdated", "date")
             if since and updated and updated[:10] < since.strftime("%Y-%m-%d"):
                 continue
-            extra = {"record": item} if "containers" in item else {}
-            refs.append(AdvisoryRef(id=adv_id, updated=updated, extra=extra))
+            ref = AdvisoryRef(id=adv_id, updated=updated)
+            if "containers" in item:   # the list already holds the full record
+                ref.record = item
+            refs.append(ref)
         self.log.info("%d advisories listed", len(refs))
         return refs
 
-    def fetch(self, ref):
-        record = ref.extra.get("record") or self.http.get_json(self.cfg["detail_url"].format(id=ref.id))
-        return self.parse_record(record, ref.id)
+    def download(self, ref):
+        record = getattr(ref, "record", None)
+        if record is not None:
+            return {f"{ref.id}.json": json.dumps(record, indent=1, ensure_ascii=False).encode("utf-8")}
+        return {f"{ref.id}.json": self.http.get(self.cfg["detail_url"].format(id=ref.id)).content}
 
-    def parse_file(self, path):
+    def parse_file(self, path, details=None):
         with open(path, encoding="utf-8") as fh:
             record = json.load(fh)
         adv_id = _first(record, "cveMetadata.cveId") or str(path)

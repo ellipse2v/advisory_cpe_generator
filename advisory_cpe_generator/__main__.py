@@ -19,7 +19,7 @@ import sys
 
 from .adapters import ADAPTERS
 from .config import load_config, resolve_path
-from .pipeline import run
+from .pipeline import STEPS, run
 
 
 def main(argv=None):
@@ -29,13 +29,15 @@ def main(argv=None):
     parser.add_argument("--config", help="config.json (defaults are used for missing keys)")
     parser.add_argument("--vendor", help=f"comma-separated, among {', '.join(ADAPTERS)} "
                                          "(default: connectors enabled in config.json)")
+    parser.add_argument("--step", choices=STEPS, default="all",
+                        help="all (default): download then enrich; download: only save the vendors' files "
+                             "in download_dir; enrich: no network, rebuild every document from download_dir "
+                             "(e.g. after editing cpe_mapping.csv)")
     parser.add_argument("--since", type=int, metavar="DAYS", help="only advisories updated in the last DAYS")
-    parser.add_argument("--max", type=int, help="fetch at most N advisories per vendor (testing)")
-    parser.add_argument("--full", action="store_true", help="fetch every advisory again")
-    parser.add_argument("--rebuild", action="store_true",
-                        help="no network: rebuild every document from the cache (e.g. after editing cpe_mapping.csv)")
+    parser.add_argument("--max", type=int, help="download at most N advisories per vendor (testing)")
+    parser.add_argument("--full", action="store_true", help="download every advisory again")
     parser.add_argument("--file", nargs="+", metavar="PATH",
-                        help="parse local files instead of fetching (one --vendor required)")
+                        help="use local files instead of downloading (one --vendor required)")
     args = parser.parse_args(argv)
 
     config = load_config(args.config)
@@ -52,9 +54,10 @@ def main(argv=None):
     if args.file and (not vendors or len(vendors) != 1):
         parser.error("--file needs exactly one --vendor")
 
-    summary = run(config, vendors, args.since, args.full, args.rebuild, args.max, args.file)
+    summary = run(config, vendors, args.since, args.full, args.step, args.max, args.file)
     for vendor, counts in summary.items():
-        print(f"{vendor}: {counts['new']} new, {counts['updated']} updated, {counts['unchanged']} unchanged, {counts['skipped']} skipped (no product)")
+        print(f"{vendor}: {counts['downloaded']} advisories downloaded; documents: {counts['new']} new, "
+              f"{counts['updated']} updated, {counts['unchanged']} unchanged, {counts['skipped']} skipped (no product)")
     return 0
 
 

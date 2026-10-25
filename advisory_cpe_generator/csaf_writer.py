@@ -153,8 +153,9 @@ def build_document(vuln, config, tracking):
             "category": "general",
             "title": "Source",
             "text": (f"Translated from {vuln.vendor_name} advisory {advisories} by advisory_cpe_generator. "
-                     "CPE identifiers not published by the vendor were taken from the NVD CPE dictionary "
-                     "or a manually maintained mapping."),
+                     "CPE identifiers not published by the vendor were derived from the CPE it published "
+                     "for another version of the product, a manually maintained mapping, or the NVD CPE "
+                     "dictionary (exact name or cpeMiniLLMLevenshtein matcher)."),
         }],
         "references": [{"category": r.category, "summary": r.summary, "url": r.url}
                        for r in vuln.references] or [{

@@ -43,6 +43,7 @@ class OracleAdapter(Adapter):
     def list_advisories(self, since=None):
         page = self.cfg["alerts_url"]
         html = self.http.get(page).text
+        self.listing = {"_list.html": html.encode("utf-8")}
         refs, seen = [], set()
         for url, name, month, year in _CPU.findall(html):
             name = name.lower()
@@ -56,14 +57,15 @@ class OracleAdapter(Adapter):
         self.log.info("%d CPU advisories listed", len(refs))
         return sorted(refs, key=lambda r: r.id)
 
-    def fetch(self, ref):
+    def download(self, ref):
         match = _CSAF.search(self.http.get(ref.url).text)
         if not match:
             self.log.info("%s has no CSAF document: skipped", ref.id)
-            return []
-        doc = self.http.get_json(urljoin(ref.url, match.group(1)))
-        return parse_csaf(doc, self.vendor, self.vendor_name)[1]
+            return {}
+        url = urljoin(ref.url, match.group(1))
+        ref.details["csaf_url"] = url
+        return {f"{ref.id}.json": self.http.get(url).content}
 
-    def parse_file(self, path):
+    def parse_file(self, path, details=None):
         with open(path, encoding="utf-8") as fh:
             return parse_csaf(json.load(fh), self.vendor, self.vendor_name)

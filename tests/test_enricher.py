@@ -102,3 +102,36 @@ def test_semantic_matcher_threshold(config):
     enricher.enrich(_vuln(a, b))
     assert a.cpe_origin == "nvd-matcher"
     assert b.cpe is None and "0.40" in enricher.review[0]["reason"]
+
+
+def test_example_from_same_advisory(config):
+    """A version the vendor gave no CPE for reuses the CPE of another version, version replaced."""
+    known = Product("Palo Alto Networks", "PAN-OS", version="11.2.2-h1",
+                    cpe="cpe:2.3:o:paloaltonetworks:pan-os:11.2.2:h1:*:*:*:*:*:*")
+    fixed = Product("Palo Alto Networks", "PAN-OS", version="11.2.4-h1", status="fixed")
+    plain = Product("Palo Alto Networks", "PAN-OS", version="10.1.0", status="known_not_affected")
+    CpeEnricher(config, dictionary=False, mapping={}).enrich(_vuln(known, fixed, plain))
+    assert (fixed.cpe, fixed.cpe_origin) == ("cpe:2.3:o:paloaltonetworks:pan-os:11.2.4:h1:*:*:*:*:*:*",
+                                             "source-example")
+    assert plain.cpe == "cpe:2.3:o:paloaltonetworks:pan-os:10.1.0:-:*:*:*:*:*:*"
+
+
+def test_example_from_another_advisory_before_mapping(config):
+    enricher = CpeEnricher(config, dictionary=NVD, mapping={
+        ("oracle", "oracle mysql server"): ("a", "x", "y")})
+    enricher.learn([Vulnerability("oracle", "Oracle", "CVE-2024-2", products=[
+        Product("Oracle", "Oracle MySQL Server", version="8.0.40",
+                cpe="cpe:2.3:a:oracle:mysql_server:8.0.40:*:*:*:*:*:*:*")])])
+    p = Product("Oracle", "Oracle MySQL Server", version="8.4.3")
+    enricher.enrich(_vuln(p))
+    assert (p.cpe, p.cpe_origin) == ("cpe:2.3:a:oracle:mysql_server:8.4.3:*:*:*:*:*:*:*", "source-example")
+
+
+def test_ambiguous_example_not_used(config):
+    enricher = CpeEnricher(config, dictionary=False, mapping={})
+    enricher.learn([Vulnerability("oracle", "Oracle", "CVE-2024-2", products=[
+        Product("Oracle", "Database", version="19", cpe="cpe:2.3:a:oracle:database_server:19:*:*:*:*:*:*:*"),
+        Product("Oracle", "Database", version="21", cpe="cpe:2.3:a:oracle:database:21:*:*:*:*:*:*:*")])])
+    p = Product("Oracle", "Database", version="23")
+    enricher.enrich(_vuln(p))
+    assert p.cpe is None and enricher.review[-1]["reason"] == "product not found"

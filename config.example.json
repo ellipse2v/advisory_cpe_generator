@@ -1,4 +1,5 @@
 {
+  "download_dir": "download",
   "output_dir": "output",
   "publisher": {
     "category": "translator",
@@ -16,8 +17,9 @@
   "cpe": {
     "mapping_csv": "cpe_mapping.csv",
     "matcher_path": "../cpeMiniLLMLevenshtein",
+    "use_examples": true,
     "use_dictionary": true,
-    "use_semantic_matcher": false,
+    "use_semantic_matcher": true,
     "min_score": 0.65,
     "expand_ranges": true,
     "review_csv": "cpe_review.csv"

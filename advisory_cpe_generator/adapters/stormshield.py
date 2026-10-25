@@ -29,6 +29,7 @@ the score is kept as text.
 
 import json
 import re
+from pathlib import Path
 
 from bs4 import BeautifulSoup
 
@@ -76,7 +77,9 @@ class StormshieldAdapter(Adapter):
 
     def list_advisories(self, since=None):
         base_url = self.cfg["base_url"]
-        soup = BeautifulSoup(self.http.get(base_url).content, "html.parser")
+        home = self.http.get(base_url).content
+        self.listing = {"_list.html": home}
+        soup = BeautifulSoup(home, "html.parser")
         script = soup.find("script", string=re.compile(r"var advisories_list = \["))
         if not script:
             self.log.error("advisories_list not found on %s", base_url)
@@ -93,20 +96,21 @@ class StormshieldAdapter(Adapter):
                 continue
             seen.add(adv["ID"])
             refs.append(AdvisoryRef(id=adv["ID"], url=adv["link"],
-                                    extra={"products": [p[0] for p in adv.get("products", [])]}))
+                                    details={"products": [p[0] for p in adv.get("products", [])]}))
         self.log.info("%d advisories listed", len(refs))
         return sorted(refs, key=lambda r: r.id)
 
-    def fetch(self, ref):
-        html = self.http.get(ref.url).content
-        return self.parse_page(html, ref.id, ref.url, ref.extra.get("products", []))
+    def download(self, ref):
+        return {f"{ref.id}.html": self.http.get(ref.url).content}
 
-    def parse_file(self, path, products=None, url=None):
+    def parse_file(self, path, details=None):
+        """details: the manifest entry (url, products from the home page)."""
+        details = details or {}
         with open(path, "rb") as fh:
             html = fh.read()
-        adv_id = re.sub(r"^.*?(\d{4}-\d{3,}).*$", r"\1", str(path))
-        return adv_id, self.parse_page(html, adv_id, url or f"{self.cfg['base_url']}/{adv_id}/",
-                                       products or [])
+        adv_id = re.sub(r"^.*?(\d{4}-\d{3,}).*$", r"\1", Path(path).name)
+        return adv_id, self.parse_page(html, adv_id, details.get("url") or f"{self.cfg['base_url']}/{adv_id}/",
+                                       details.get("products") or [])
 
     def parse_page(self, html, advisory_id, url, products):
         soup = BeautifulSoup(html, "html.parser")

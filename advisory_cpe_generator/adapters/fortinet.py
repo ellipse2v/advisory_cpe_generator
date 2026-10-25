@@ -38,7 +38,9 @@ class FortinetAdapter(Adapter):
     vendor_name = "Fortinet"
 
     def list_advisories(self, since=None):
-        root = ET.fromstring(self.http.get(self.cfg["rss_url"]).content)
+        raw = self.http.get(self.cfg["rss_url"]).content
+        self.listing = {"_list.xml": raw}
+        root = ET.fromstring(raw)
         refs = []
         for item in root.iter("item"):
             links = {}
@@ -63,16 +65,15 @@ class FortinetAdapter(Adapter):
                 self.log.warning("%s has neither CSAF nor CVRF link: skipped", match.group(0))
                 continue
             refs.append(AdvisoryRef(id=match.group(0).upper(), url=url, updated=updated,
-                                    extra={"format": "csaf" if links.get("csaf") else "cvrf"}))
+                                    details={"format": "csaf" if links.get("csaf") else "cvrf"}))
         self.log.info("%d advisories listed", len(refs))
         return refs
 
-    def fetch(self, ref):
-        if ref.extra.get("format") == "csaf":
-            return parse_csaf(self.http.get_json(ref.url), self.vendor, self.vendor_name)[1]
-        return parse_cvrf(self.http.get(ref.url).content, self.vendor, self.vendor_name)[1]
+    def download(self, ref):
+        extension = "json" if ref.details.get("format") == "csaf" else "xml"
+        return {f"{ref.id}.{extension}": self.http.get(ref.url).content}
 
-    def parse_file(self, path):
+    def parse_file(self, path, details=None):
         with open(path, "rb") as fh:
             data = fh.read()
         if str(path).lower().endswith(".json"):

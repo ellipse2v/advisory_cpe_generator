@@ -20,8 +20,9 @@ Credentials come from the environment variables named in config.json
 repository. Advisories listed by the API are expected to carry a "csafUrl";
 an advisory without one is skipped with a warning.
 
-parse_file() reads a CSAF file already on disk (e.g. downloaded with
-cisco_csaf_dowloader), which needs no credentials.
+Only the listing needs credentials: the CSAF documents are public, and
+parse_file() reads them from disk (including files downloaded with
+cisco_csaf_dowloader, given with --file).
 """
 
 import json
@@ -73,6 +74,7 @@ class CiscoAdapter(Adapter):
         else:
             url = f"{base}/all"
         data = self._api(url)
+        self.listing = {"_list.json": json.dumps(data, indent=1).encode("utf-8")}
         items = data.get("advisories", []) if isinstance(data, dict) else data
         refs = []
         for item in items:
@@ -86,11 +88,10 @@ class CiscoAdapter(Adapter):
         self.log.info("%d advisories listed", len(refs))
         return refs
 
-    def fetch(self, ref):
-        doc = self.http.get_json(ref.url)
-        return parse_csaf(doc, self.vendor, self.vendor_name)[1]
+    def download(self, ref):
+        return {f"{ref.id}.json": self.http.get(ref.url).content}
 
-    def parse_file(self, path):
+    def parse_file(self, path, details=None):
         with open(path, encoding="utf-8") as fh:
             doc = json.load(fh)
         if "document" not in doc:

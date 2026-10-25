@@ -15,10 +15,14 @@
 CPE resolution for every product of a vulnerability, in this order:
 
 1. CPE given by the source (kept if it is a valid CPE 2.3 string)
-2. manual table cpe_mapping.csv (vendor, product -> part, cpe vendor, cpe product)
-3. NVD dictionary, exact product name (cpeMiniLLMLevenshtein's cache and aliases)
-4. cpeMiniLLMLevenshtein's semantic matcher (optional, needs the model)
-5. otherwise no CPE: the product goes to cpe_review.csv, nothing is guessed
+2. example: the vendor gave a CPE for another version of the same product, in
+   this advisory or in another downloaded advisory of the vendor; that CPE is
+   reused with the version replaced
+3. manual table cpe_mapping.csv (vendor, product -> part, cpe vendor, cpe product)
+4. NVD dictionary, exact product name (cpeMiniLLMLevenshtein's cache and aliases)
+5. cpeMiniLLMLevenshtein's semantic matcher (skipped when sentence-transformers
+   is not installed)
+6. otherwise no CPE: the product goes to cpe_review.csv, nothing is guessed
 
 A product with no exact version (range, or no version at all) never gets a
 wildcard CPE, which would mark every version as affected. When the NVD
@@ -56,6 +60,48 @@ def load_mapping(path):
             mapping[(_norm(r["vendor"]), _norm(r["product"]))] = (
                 r["cpe_part"].strip(), r["cpe_vendor"].strip(), r["cpe_product"].strip())
     return mapping
+
+
+class Examples:
+    """
+    CPEs a vendor published for some versions of a product, used as templates
+    for its other versions: (vendor, product name) -> CPE (part, vendor, product).
+    A name the vendor published under two different CPE products is ambiguous
+    and not used.
+    """
+
+    def __init__(self):
+        self.templates = {}   # (vendor, name) -> {(part, cpe vendor, cpe product): splits update}
+
+    def add(self, products):
+        for p in products:
+            if not (p.cpe and p.version and cpe_lib.is_valid_cpe23(p.cpe)):
+                continue
+            parts = cpe_lib.split_cpe(p.cpe)
+            if parts[5] in ("*", "-"):
+                continue   # a CPE for every version is not an example of one version
+            keys = self.templates.setdefault((_norm(p.vendor), _norm(p.name)), {})
+            key = tuple(parts[2:5])
+            # Palo Alto writes the hotfix in the update field (11.2.2 + h1, 11.2.3 + -).
+            keys[key] = keys.get(key, False) or parts[6] != "*"
+        return self
+
+    def get(self, product):
+        """(part, vendor, product, splits update) or None."""
+        keys = self.templates.get((_norm(product.vendor), _norm(product.name)))
+        if not keys or len(keys) > 1:
+            return None
+        [(key, splits)] = keys.items()
+        return (*key, splits)
+
+    @staticmethod
+    def cpe(template, version):
+        part, vendor, product, splits = template
+        if not splits:
+            return cpe_lib.build(part, vendor, product, version)
+        m = re.match(r"^(.+?)-([a-z][a-z0-9]*)$", version, re.I)
+        version, update = (m.group(1), m.group(2).lower()) if m else (version, "-")
+        return cpe_lib.build(part, vendor, product, version, cpe_lib.escape(update))
 
 
 class NvdDictionary:
@@ -159,7 +205,14 @@ class CpeEnricher:
         self._dictionary = dictionary
         self._semantic = semantic
         self._matcher_path = matcher_path
+        self.examples = Examples()   # vendor-wide, filled by learn()
         self.review = []   # rows for cpe_review.csv
+
+    def learn(self, vulns):
+        """Remember the CPEs the vendor published, as examples for other versions."""
+        if self.cfg.get("use_examples", True):
+            for vuln in vulns:
+                self.examples.add(vuln.products)
 
     # Heavy resources are loaded only when a product actually needs them.
     @property
@@ -177,8 +230,11 @@ class CpeEnricher:
         if self._semantic is None and self.cfg.get("use_semantic_matcher") and self._matcher_path:
             try:
                 self._semantic = SemanticMatcher(self._matcher_path, float(self.cfg.get("min_score", 0.65)))
+            except ImportError as e:
+                log.warning("LLM matcher skipped: %s (pip install sentence-transformers torch)", e)
+                self._semantic = False
             except Exception as e:
-                log.warning("Semantic matcher unavailable (%s): step skipped", e)
+                log.warning("LLM matcher unavailable (%s): step skipped", e)
                 self._semantic = False
         return self._semantic or None
 
@@ -187,6 +243,7 @@ class CpeEnricher:
         pending = []
         named_with_source_cpe = {(p.vendor.lower(), p.name.lower()) for p in vuln.products
                                  if p.cpe and cpe_lib.is_valid_cpe23(p.cpe)}
+        local = Examples().add(vuln.products) if self.cfg.get("use_examples", True) else Examples()
         added = []
         for product in vuln.products:
             if product.cpe:
@@ -195,7 +252,7 @@ class CpeEnricher:
                     continue
                 self._report(vuln, product, "invalid CPE from source dropped: " + product.cpe)
                 product.cpe = None
-            key = self._identify(product)
+            key = self._identify(product, local)
             if key and product.version:
                 product.cpe = key[1](product.version)
                 product.cpe_origin = key[0]
@@ -212,8 +269,11 @@ class CpeEnricher:
         self._semantic_pass(vuln, pending)
         return vuln
 
-    def _identify(self, product):
-        """(origin, version -> CPE function, NVD key or None), or None."""
+    def _identify(self, product, local):
+        """(origin, version -> CPE function, CPE product key), or None."""
+        template = local.get(product) or self.examples.get(product)
+        if template:
+            return "source-example", (lambda v: Examples.cpe(template, v)), template[:3]
         mapped = self.mapping.get((_norm(product.vendor), _norm(product.name)))
         if mapped:
             part, vendor, name = mapped
