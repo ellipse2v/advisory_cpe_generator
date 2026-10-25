@@ -24,10 +24,14 @@ CPE resolution for every product of a vulnerability, in this order:
    is not installed)
 6. otherwise no CPE: the product goes to cpe_review.csv, nothing is guessed
 
-A product with no exact version (range, or no version at all) never gets a
-wildcard CPE, which would mark every version as affected. When the NVD
-product is known, the range can instead be expanded into the versions the
-dictionary lists (one product per version, each with its own CPE).
+A version range gets the product's CPE with version '*' (range_cpe), next to
+its 'vers' expression, so that a consumer such as Dependency-Track can match
+CPE and range together. The CPE product comes from the same chain; when no
+step knows the product, it is built from the vendor and product names and
+the product is listed in cpe_review.csv. When the NVD product is known, the
+range can also be expanded into the versions the dictionary lists (one
+product per version, each with its own CPE). A product with no version at
+all gets no CPE.
 """
 
 import csv
@@ -40,6 +44,8 @@ from pathlib import Path
 
 from . import cpe as cpe_lib
 from .config import resolve_path
+from collections import Counter
+
 from .model import Product
 
 log = logging.getLogger(__name__)
@@ -226,6 +232,7 @@ class CpeEnricher:
         self._semantic = semantic
         self._matcher_path = matcher_path
         self.examples = Examples()   # vendor-wide, filled by learn()
+        self.vendor_slugs = {}       # vendor name -> Counter of the CPE vendors seen for it
         self.review = []   # rows for cpe_review.csv
 
     def learn(self, vulns):
@@ -264,7 +271,7 @@ class CpeEnricher:
         named_with_source_cpe = {(p.vendor.lower(), p.name.lower()) for p in vuln.products
                                  if p.cpe and cpe_lib.is_valid_cpe23(p.cpe)}
         local = Examples().add(vuln.products) if self.cfg.get("use_examples", True) else Examples()
-        added = []
+        added, ranges = [], []
         for product in vuln.products:
             if product.cpe:
                 if cpe_lib.is_valid_cpe23(product.cpe):
@@ -273,21 +280,51 @@ class CpeEnricher:
                 self._report(vuln, product, "invalid CPE from source dropped: " + product.cpe)
                 product.cpe = None
             key = self._identify(product, local)
-            if key and product.version:
-                product.cpe = key[1](product.version)
-                product.cpe_origin = key[0]
-            elif key and product.version_range and self.cfg.get("expand_ranges") \
-                    and (product.vendor.lower(), product.name.lower()) not in named_with_source_cpe:
-                added.extend(self._expand(vuln, product, key[2]))
-            elif not key and product.version:
-                pending.append(product)
-            elif not product.version:
-                self._report(vuln, product, "no exact version: no CPE")
+            if product.version:
+                if key:
+                    product.cpe = key[1](product.version)
+                    product.cpe_origin = key[0]
+                else:
+                    pending.append(product)
+            elif product.version_range or product.raw_range:
+                ranges.append((product, key))
+                if key and product.version_range and self.cfg.get("expand_ranges") \
+                        and (product.vendor.lower(), product.name.lower()) not in named_with_source_cpe:
+                    added.extend(self._expand(vuln, product, key[2]))
             else:
-                self._report(vuln, product, "product not found")
-        vuln.products.extend(added)
+                self._report(vuln, product, "no version: no CPE")
         self._semantic_pass(vuln, pending)
+        for product in vuln.products + added:
+            if product.cpe:
+                parts = cpe_lib.split_cpe(product.cpe)
+                self.vendor_slugs.setdefault(_norm(product.vendor), Counter())[parts[3]] += 1
+        for product, key in ranges:
+            self._range_cpe(vuln, product, key, local)
+        vuln.products.extend(added)
         return vuln
+
+    def _range_cpe(self, vuln, product, key, local):
+        """The product's CPE with version '*' on a version range."""
+        if not self.cfg.get("range_cpe", True):
+            self._report(vuln, product, "version range: no CPE (range_cpe off)")
+            return
+        # A sibling version identified by the matcher in this advisory names the CPE product too.
+        siblings = {cpe_lib.product_key(p.cpe) for p in vuln.products
+                    if p.cpe and p.cpe_origin == "nvd-matcher" and p.name == product.name}
+        if key:
+            part, vendor, name = key[2]
+            origin = key[0]
+        elif len(siblings) == 1:
+            part, vendor, name = siblings.pop()
+            origin = "nvd-matcher"
+        else:
+            slugs = self.vendor_slugs.get(_norm(product.vendor))
+            vendor = slugs.most_common(1)[0][0] if slugs else cpe_lib.escape(product.vendor.replace(" ", ""))
+            label = re.sub(rf"^{re.escape(product.vendor)}\s+", "", product.name, flags=re.I)
+            part, name, origin = "a", cpe_lib.escape(label), "product-name"
+            self._report(vuln, product, "version range: CPE built from the product name (not identified)")
+        product.cpe = ":".join(["cpe", "2.3", part, vendor, name] + ["*"] * 8)
+        product.cpe_origin = origin
 
     def _identify(self, product, local):
         """(origin, version -> CPE function, CPE product key), or None."""

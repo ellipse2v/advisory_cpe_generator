@@ -16,7 +16,7 @@ Vulnerability -> CSAF 2.0 document (profile csaf_security_advisory).
 
 Only fields of the CSAF 2.0 standard are written. The CPE goes in
 product_identification_helper.cpe; a version range is a product_version_range
-branch named with a 'vers' expression and carries no CPE.
+branch named with a 'vers' expression, with the product's CPE (version '*').
 """
 
 import re

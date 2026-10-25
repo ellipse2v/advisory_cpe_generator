@@ -52,6 +52,8 @@ DEFAULTS = {
         # Skipped with a warning when sentence-transformers/torch are not installed.
         "use_semantic_matcher": True,
         "min_score": 0.65,
+        # A version range gets the product's CPE with version '*' (next to its vers expression).
+        "range_cpe": True,
         # Expand a version range into the versions the NVD dictionary lists.
         "expand_ranges": True,
         "review_csv": "cpe_review.csv",

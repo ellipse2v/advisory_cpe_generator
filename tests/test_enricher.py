@@ -79,7 +79,8 @@ def test_range_expanded_with_dictionary_versions(config):
                 version_range=VersionRange(introduced="4.3.0", last_affected="4.3.20"))
     v = _vuln(p)
     CpeEnricher(config, dictionary=NVD, mapping={}).enrich(v)
-    assert p.cpe is None    # the range itself never gets a wildcard CPE
+    # the range itself: the product's CPE, version '*'
+    assert p.cpe == "cpe:2.3:a:stormshield:stormshield_network_security:*:*:*:*:*:*:*:*"
     expanded = sorted(x.version for x in v.products if x.cpe_origin == "nvd-range")
     assert expanded == ["4.3.0", "4.3.5"]
 
@@ -155,3 +156,30 @@ def test_matcher_result_for_another_product_rejected(config):
     enricher.enrich(_vuln(fast, vpn))
     assert fast.cpe is None and "other product" in enricher.review[0]["reason"]
     assert vpn.cpe_origin == "nvd-matcher"
+
+
+def test_range_cpe_built_from_name_when_product_unknown(config):
+    """Netasq is not in NVD: CPE from the names, vendor as in the vendor's other CPEs, reported."""
+    ses = Product("Stormshield", "Stormshield Network Security", version="4.3.0")
+    netasq = Product("Stormshield", "Netasq", version_range=VersionRange(introduced="9.0.0", last_affected="9.1.3"))
+    enricher = CpeEnricher(config, dictionary=NVD, mapping={})
+    enricher.enrich(_vuln(netasq, ses))
+    assert netasq.cpe == "cpe:2.3:a:stormshield:netasq:*:*:*:*:*:*:*:*"
+    assert cpe_lib.is_valid_cpe23(netasq.cpe) and netasq.cpe_origin == "product-name"
+    assert "built from the product name" in enricher.review[-1]["reason"]
+
+
+def test_range_cpe_from_example(config):
+    known = Product("Palo Alto Networks", "PAN-OS", version="11.2.3",
+                    cpe="cpe:2.3:o:paloaltonetworks:pan-os:11.2.3:-:*:*:*:*:*:*")
+    rng = Product("Palo Alto Networks", "PAN-OS", version_range=VersionRange(introduced="11.2.0", fixed="11.2.4-h1"))
+    CpeEnricher(config, dictionary=False, mapping={}).enrich(_vuln(known, rng))
+    assert rng.cpe == "cpe:2.3:o:paloaltonetworks:pan-os:*:*:*:*:*:*:*:*"
+    assert rng.cpe_origin == "source-example"
+
+
+def test_range_cpe_can_be_turned_off(config):
+    config["cpe"]["range_cpe"] = False
+    rng = Product("Stormshield", "Netasq", version_range=VersionRange(introduced="9.0.0"))
+    CpeEnricher(config, dictionary=False, mapping={}).enrich(_vuln(rng))
+    assert rng.cpe is None

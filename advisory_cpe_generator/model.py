@@ -39,7 +39,7 @@ class Product:
     status: str = KNOWN_AFFECTED
     cpe: str = None
     purl: str = None
-    cpe_origin: str = None            # source | mapping | nvd-dictionary | nvd-range | nvd-matcher
+    cpe_origin: str = None            # source | source-example | mapping | nvd-dictionary | nvd-range | nvd-matcher | product-name
 
     def label(self):
         if self.version:

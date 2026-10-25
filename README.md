@@ -93,7 +93,7 @@ Both directories are set in config.json (`download_dir`, `output_dir`).
 | Data | CSAF field |
 |---|---|
 | Product, version | `product_tree`: vendor → product_name → `product_version` |
-| Version range | `product_version_range` named with a [vers](https://github.com/package-url/vers-spec) expression, e.g. `vers:generic/>=11.2.0\|<11.2.4-h1`. No CPE: a wildcard CPE would mark every version as affected |
+| Version range | `product_version_range` named with a [vers](https://github.com/package-url/vers-spec) expression, e.g. `vers:generic/>=11.2.0\|<11.2.4-h1`, with the product's CPE, version `*` (`cpe:2.3:o:paloaltonetworks:pan-os:*:*:*:*:*:*:*:*`): read the two together, the CPE alone means every version |
 | CPE | `product_identification_helper.cpe` |
 | Affected / fixed / not affected | `vulnerabilities[].product_status` |
 | CVSS v2, v3.0, v3.1 | `vulnerabilities[].scores` (only when the source gives the vector) |
@@ -124,6 +124,12 @@ For every product version, in this order:
    above; the CPE's version is the product's. A result whose CPE product shares no word with
    the product name is rejected as another product (*Fast360* → `h:stormshield:sn310`).
 6. Otherwise no CPE, and a line in `cpe_review.csv`.
+
+A version range gets the product's CPE with version `*` (`range_cpe`, on by default), so that
+a consumer such as Dependency-Track can combine CPE and range. The CPE product comes from the
+steps above; when none identifies it (e.g. *Netasq*, not in NVD), it is built from the vendor
+and product names (`cpe:2.3:a:stormshield:netasq:*:...`, with the vendor as in the vendor's
+other CPEs) and the product is listed in `cpe_review.csv`. A product with no version gets no CPE.
 
 With `expand_ranges`, a range of a product identified in the NVD dictionary (and for which
 the source gave no CPE) is expanded into the versions NVD lists in that range, each with its
