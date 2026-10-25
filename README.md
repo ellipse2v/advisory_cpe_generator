@@ -23,7 +23,7 @@ A run has two phases, over every vendor:
 | Cisco | openVuln API, then each advisory's CSAF document | Sometimes (`product_identification_helper`) |
 | Palo Alto Networks | https://security.paloaltonetworks.com/api (`/json`, `/json/{ID}`): CVE JSON 5 records | Yes on recent records (`cpes`) |
 | Oracle | Critical Patch Update CSAF, one per quarter (linked from each `cpu<mon><year>.html`), split per CVE | Yes |
-| Fortinet | FortiGuard PSIRT RSS feed (or, with `--history`, every page of the PSIRT list), then each advisory's CSAF document, else its HTML page, else its CVRF 1.2 document | CSAF: depends on the document; HTML, CVRF: no |
+| Fortinet | FortiGuard PSIRT RSS feed (or, with `--history`, every page of the PSIRT list), then each advisory's CSAF document (`/psirt/{id}/csaf`), else its HTML page, else its CVRF 1.2 document | CSAF: depends on the document; HTML, CVRF: no |
 
 ## Installation
 
@@ -183,7 +183,9 @@ validated against the CSAF 2.0 JSON schema (with the FIRST CVSS schemas).
 - **Fortinet**: the RSS feed lists the latest advisories only (50); `--history` reads every page
   of the PSIRT list instead (about 15 advisories per page, until a page brings nothing new),
   for a first full download. Each advisory is downloaded in the first format it has among
-  `formats` (CSAF, HTML page, CVRF). The HTML page's Version / Affected / Solution table gives
+  `formats` (CSAF, HTML page, CVRF); every advisory page has its CSAF at
+  `https://www.fortiguard.com/psirt/{id}/csaf`, so the HTML and CVRF readers are fallbacks.
+  FortiGuard answers a browser User-Agent: the connector's `http.user_agent` sets one. The HTML page's Version / Affected / Solution table gives
   the products: *7.4.0 through 7.4.2* is a range, *6.0 all versions* the range of the branch
   (`>=6.0|<6.1`), *Not affected* a `known_not_affected` branch, *Upgrade to 7.4.3 or above* a
   `fixed` version and a `vendor_fix`. The Summary's "Workaround:" paragraph is a workaround,

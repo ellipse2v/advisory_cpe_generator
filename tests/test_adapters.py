@@ -213,12 +213,15 @@ def test_fortinet_rss_prefers_csaf_then_html_then_cvrf(config, tmp_path):
     adapter = FortinetAdapter(connector_config(config, "fortinet"), http=http)
     a, b = adapter.list_advisories()
     assert (a.id, a.updated) == ("FG-IR-26-186", "2026-10-21")
-    assert set(a.details["urls"]) == {"csaf", "html", "cvrf"} and set(b.details["urls"]) == {"html", "cvrf"}
+    assert a.details["urls"]["csaf"].endswith("csaf_example_fg-ir-26-186.json")              # RSS link first
+    assert b.details["urls"]["csaf"] == "https://www.fortiguard.com/psirt/FG-IR-20-005/csaf"  # else the page's
     assert list(adapter.download(a)) == ["FG-IR-26-186.json"]
-    # b: no CSAF, its HTML page cannot be fetched (not served here): CVRF
+    # b: neither its CSAF nor its HTML page can be fetched (not served here): CVRF
     assert list(adapter.download(b)) == ["FG-IR-20-005.xml"] and b.details["format"] == "cvrf"
     http.pages["https://fortiguard.fortinet.com/psirt/FG-IR-20-005"] = FORTI_PAGE.read_bytes()
     assert list(adapter.download(b)) == ["FG-IR-20-005.html"]
+    http.pages["https://www.fortiguard.com/psirt/FG-IR-20-005/csaf"] = (FIXTURES / "cisco-sa-20180328-smi2.json").read_text()
+    assert list(adapter.download(b)) == ["FG-IR-20-005.json"]
     assert fetch(adapter, a, tmp_path)[0].vendor == fetch(adapter, b, tmp_path)[0].vendor == "fortinet"
 
 
@@ -262,7 +265,8 @@ def test_fortinet_history_pages(config):
     adapter = FortinetAdapter(connector_config(config, "fortinet"), http=FakeHttp(pages))
     refs = adapter.list_advisories(history=True)
     assert [r.id for r in refs] == ["FG-IR-26-182", "FG-IR-26-181", "FG-IR-25-010"]
-    assert refs[0].details["urls"] == {"html": "https://www.fortiguard.com/psirt/FG-IR-26-182",
+    assert refs[0].details["urls"] == {"csaf": "https://www.fortiguard.com/psirt/FG-IR-26-182/csaf",
+                                       "html": "https://www.fortiguard.com/psirt/FG-IR-26-182",
                                        "cvrf": "https://www.fortiguard.com/psirt/cvrf/FG-IR-26-182"}
 
 OLD_PAGE = FIXTURES / "stormshield_2014-003_reconstructed.html"
@@ -306,3 +310,9 @@ def test_stormshield_old_layout_without_tables(config, tmp_path):
     (tmp_path / "2014-003.html").write_text(html)
     _, [v] = StormshieldAdapter(connector_config(config, "stormshield")).parse_file(tmp_path / "2014-003.html")
     _old_page_checks(v)
+
+
+def test_fortinet_browser_user_agent(config):
+    from advisory_cpe_generator.http import HttpClient
+    assert HttpClient(connector_config(config, "fortinet")).session.headers["User-Agent"].startswith("Mozilla/5.0")
+    assert HttpClient(connector_config(config, "oracle")).session.headers["User-Agent"].startswith("advisory_cpe")

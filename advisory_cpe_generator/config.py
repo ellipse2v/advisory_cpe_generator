@@ -89,10 +89,13 @@ DEFAULTS = {
             # --history: every page of the PSIRT list instead of the RSS feed.
             "list_page_url": "https://www.fortiguard.com/psirt?page={page}",
             "max_pages": 500,
+            "csaf_url": "https://www.fortiguard.com/psirt/{id}/csaf",
             "page_url": "https://www.fortiguard.com/psirt/{id}",
             "cvrf_url": "https://www.fortiguard.com/psirt/cvrf/{id}",
             # Each advisory is downloaded in the first of these formats it has.
             "formats": ["csaf", "html", "cvrf"],
+            # FortiGuard answers a browser User-Agent.
+            "http": {"user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
             "delay": 1.0,
         },
     },

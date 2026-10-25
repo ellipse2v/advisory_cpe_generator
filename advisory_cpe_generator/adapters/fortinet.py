@@ -18,8 +18,10 @@ Listing: the RSS feed (latest advisories, 50 when this was written), or with
 --history every page of the PSIRT list (https://www.fortiguard.com/psirt?page=N).
 
 Each advisory is downloaded in the first format it has, in the order of the
-connector's "formats" (default csaf, html, cvrf): its CSAF document, its HTML
-page, or its CVRF 1.2 document. CVRF gives products and fixes as prose, the
+connector's "formats" (default csaf, html, cvrf): its CSAF document (the RSS
+<csaf:link>, else https://www.fortiguard.com/psirt/{id}/csaf, which every
+advisory page has), its HTML page, or its CVRF 1.2 document. FortiGuard
+answers these URLs with a browser User-Agent (connector "http" block). CVRF gives products and fixes as prose, the
 HTML page as a Version / Affected / Solution table:
 
   FortiOS 7.4 | 7.4.0 through 7.4.2 | Upgrade to 7.4.3 or above
@@ -111,6 +113,9 @@ class FortinetAdapter(Adapter):
         self.log.info("%d advisories listed", len(refs))
         return refs
 
+    def _csaf_url(self, adv_id):
+        return self.cfg.get("csaf_url", "https://www.fortiguard.com/psirt/{id}/csaf").format(id=adv_id)
+
     def _page_url(self, adv_id):
         return self.cfg.get("page_url", "https://www.fortiguard.com/psirt/{id}").format(id=adv_id)
 
@@ -139,7 +144,7 @@ class FortinetAdapter(Adapter):
             if since and updated and updated < since.strftime("%Y-%m-%d"):
                 continue
             page = links.get("link") if _ID.search(links.get("link", "")) else self._page_url(adv_id)
-            urls = {"csaf": links.get("csaf"), "html": page, "cvrf": links.get("cvrf")}
+            urls = {"csaf": links.get("csaf") or self._csaf_url(adv_id), "html": page, "cvrf": links.get("cvrf")}
             refs.append(AdvisoryRef(id=adv_id, url=page, updated=updated,
                                     details={"urls": {k: v for k, v in urls.items() if v}}))
         return refs
@@ -158,8 +163,8 @@ class FortinetAdapter(Adapter):
                 break
             for adv_id in new:
                 seen.add(adv_id)
-                # The pages give neither CSAF links nor dates: the HTML page, then the CVRF document.
                 refs.append(AdvisoryRef(id=adv_id, url=self._page_url(adv_id), details={"urls": {
+                    "csaf": self._csaf_url(adv_id),
                     "html": self._page_url(adv_id),
                     "cvrf": self.cfg.get("cvrf_url", "https://www.fortiguard.com/psirt/cvrf/{id}").format(id=adv_id)}}))
         return refs
