@@ -49,6 +49,26 @@ def _norm(text):
     return re.sub(r"[^a-z0-9]+", " ", str(text).lower()).strip()
 
 
+def _words(text):
+    return set(re.findall(r"[a-z0-9]+", str(text).lower()))
+
+
+def plausible(product, cpe):
+    """
+    A matcher result is kept only when its CPE product shares a word with the
+    product name, the vendor's words aside (Fast360 -> stormshield:sn310, or
+    Netasq -> stormshield_network_security, are other products).
+    """
+    parts = cpe_lib.split_cpe(cpe)
+    if len(parts) < 5:
+        return False
+    vendor_words = _words(product.vendor) | _words(parts[3].replace("_", " "))
+    name = _words(product.name) - vendor_words
+    target = _words(cpe_lib.unescape(parts[4]).replace("_", " ")) - vendor_words
+    squashed = re.sub(r"[^a-z0-9]", "", cpe_lib.unescape(parts[4]).lower())
+    return bool(name & target) or re.sub(r"[^a-z0-9]", "", product.name.lower()) == squashed
+
+
 def load_mapping(path):
     """{(normalized vendor, normalized product): (part, cpe_vendor, cpe_product)}"""
     mapping = {}
@@ -313,7 +333,9 @@ class CpeEnricher:
             return
         results = matcher.match([(p.vendor, p.name, p.version) for p in products])
         for p, (cpe, score) in zip(products, results):
-            if cpe and cpe_lib.is_valid_cpe23(cpe):
+            if cpe and cpe_lib.is_valid_cpe23(cpe) and not plausible(p, cpe):
+                self._report(vuln, p, f"matcher result rejected, other product: {cpe} (score {score:.2f})")
+            elif cpe and cpe_lib.is_valid_cpe23(cpe):
                 p.cpe, p.cpe_origin = cpe, "nvd-matcher"
             else:
                 self._report(vuln, p, f"matcher below threshold (best score {score:.2f})")

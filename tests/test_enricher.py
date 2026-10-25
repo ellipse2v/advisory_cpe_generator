@@ -135,3 +135,23 @@ def test_ambiguous_example_not_used(config):
     p = Product("Oracle", "Database", version="23")
     enricher.enrich(_vuln(p))
     assert p.cpe is None and enricher.review[-1]["reason"] == "product not found"
+
+
+class FakeMatcher:
+    def __init__(self, answers):
+        self.answers = answers
+
+    def match(self, queries):
+        return [self.answers[name] for _, name, _ in queries]
+
+
+def test_matcher_result_for_another_product_rejected(config):
+    """Fast360 -> stormshield:sn310 (an appliance model) is another product: no CPE."""
+    fast = Product("Stormshield", "Fast360", version="5.0")
+    vpn = Product("Stormshield", "Stormshield Network VPN Client", version="7.5.109")
+    enricher = CpeEnricher(config, dictionary=False, mapping={}, semantic=FakeMatcher({
+        "Fast360": ("cpe:2.3:h:stormshield:sn310:5.0:*:*:*:*:*:*:*", 0.71),
+        "Stormshield Network VPN Client": ("cpe:2.3:a:stormshield:network_vpn_client:7.5.109:*:*:*:*:*:*:*", 0.8)}))
+    enricher.enrich(_vuln(fast, vpn))
+    assert fast.cpe is None and "other product" in enricher.review[0]["reason"]
+    assert vpn.cpe_origin == "nvd-matcher"

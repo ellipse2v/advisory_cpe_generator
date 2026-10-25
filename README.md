@@ -121,7 +121,8 @@ For every product version, in this order:
    otherwise the version is substituted in the product's CPE.
 5. **LLM matcher** (on by default, needs sentence-transformers and torch, otherwise skipped
    with a warning): cpeMiniLLMLevenshtein's `CPEMatcher`, accepted at `min_score` (0.65) or
-   above; the CPE's version is the product's.
+   above; the CPE's version is the product's. A result whose CPE product shares no word with
+   the product name is rejected as another product (*Fast360* → `h:stormshield:sn310`).
 6. Otherwise no CPE, and a line in `cpe_review.csv`.
 
 With `expand_ranges`, a range of a product identified in the NVD dictionary (and for which
@@ -162,6 +163,12 @@ validated against the CSAF 2.0 JSON schema (with the FIRST CVSS schemas).
 
 ### Vendor notes
 
+- **Stormshield**: pages from before 2017 have one block per product (versions, analysis,
+  workaround, solution, CVSS v2 metrics); each product gets its own CVSS base score and
+  remediations, and the versions its Solution names as correcting the issue are `fixed`.
+  A solution that only announces a future version is `none_available`. The overall
+  (environmental) score is kept as a note. Tested on a page rebuilt from the text of
+  STORM-2014-003; the original markup was not available.
 - **Oracle**: only the quarterly CPUs have a CSAF document; out-of-band Security Alerts and
   the Linux/Solaris bulletins are not covered. A CPU document is fetched once; `--full`
   fetches revised ones again. Oracle's own CPEs are kept as published, including the few

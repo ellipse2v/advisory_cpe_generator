@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import re
+
 from advisory_cpe_generator.adapters import (CiscoAdapter, FortinetAdapter, OracleAdapter, PaloAltoAdapter,
                                              StormshieldAdapter)
 from advisory_cpe_generator.adapters.stormshield import parse_versions
@@ -215,3 +217,46 @@ def test_fortinet_rss_prefers_csaf_then_cvrf(config, tmp_path):
     assert list(adapter.download(a)) == ["FG-IR-26-186.json"]
     assert list(adapter.download(b)) == ["FG-IR-20-005.xml"]
     assert fetch(adapter, a, tmp_path)[0].vendor == fetch(adapter, b, tmp_path)[0].vendor == "fortinet"
+
+
+OLD_PAGE = FIXTURES / "stormshield_2014-003_reconstructed.html"
+
+
+def _old_page_checks(v):
+    by_name = {}
+    for p in v.products:
+        by_name.setdefault(p.name, []).append((p.label(), p.status))
+    assert by_name == {
+        "Stormshield Network Security": [("vers:generic/>=1.0.0|<=1.1.3", KNOWN_AFFECTED)],
+        "Stormshield Endpoint Security": [("6.0.15", KNOWN_AFFECTED), ("7.1.02", KNOWN_AFFECTED),
+                                          ("6.0.17", "fixed"), ("7.1.04", "fixed")],
+        "Fast360": [("vers:generic/>=5.0/16|<=5.0/32", KNOWN_AFFECTED),
+                    ("vers:generic/>=6.0/1|<=6.0/6", KNOWN_AFFECTED)],
+        "Netasq": [("vers:generic/>=9.0.0|<=9.1.3", KNOWN_AFFECTED)],
+    }
+    # one CVSS v2 base score per product, the overall scores (2.8, 4.3...) are not versions
+    assert [(s.product_names, s.base_score, s.vector) for s in v.scores][2] == (
+        ["Fast360"], 6.1, "AV:A/AC:L/Au:N/C:N/I:N/A:C")
+    rem = {(r.product_names[0], r.category) for r in v.remediations}
+    assert ("Stormshield Endpoint Security", "vendor_fix") in rem
+    assert ("Stormshield Endpoint Security", "workaround") not in rem    # "There is no workaround solution."
+    assert ("Fast360", "none_available") in rem and ("Fast360", "workaround") in rem
+
+
+def test_stormshield_old_layout(config):
+    """Pre-2017 page: one block per product (STORM-2014-003, CVE-2014-3567)."""
+    adapter = StormshieldAdapter(connector_config(config, "stormshield"))
+    _, [v] = adapter.parse_file(OLD_PAGE, {"url": "https://advisories.stormshield.eu/424/"})
+    assert v.advisory_ids == ["STORM-2014-003"] and v.release_date == "2014-10-23T00:00:00Z"
+    assert v.notes[0].text.startswith("A memory leak allows")
+    _old_page_checks(v)
+
+
+def test_stormshield_old_layout_without_tables(config, tmp_path):
+    """Same page with the tables flattened into paragraphs: same products and remediations."""
+    html = OLD_PAGE.read_text()
+    html = re.sub(r"</?(table|tr|ul)>", "", html)
+    html = re.sub(r"<(td|th|li)>", "<p>", re.sub(r"</(td|th|li)>", "</p>", html))
+    (tmp_path / "2014-003.html").write_text(html)
+    _, [v] = StormshieldAdapter(connector_config(config, "stormshield")).parse_file(tmp_path / "2014-003.html")
+    _old_page_checks(v)

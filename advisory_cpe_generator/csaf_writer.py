@@ -102,6 +102,10 @@ def build_document(vuln, config, tracking):
             status[product.status].append(pid)
     affected = status.get(KNOWN_AFFECTED, [])
 
+    def affected_named(names):
+        return list(dict.fromkeys(ids[p.key()] for p in vuln.products
+                                  if p.status == KNOWN_AFFECTED and p.name in names))
+
     v = {"cve": vuln.cve}
     if vuln.title:
         v["title"] = vuln.title
@@ -118,14 +122,21 @@ def build_document(vuln, config, tracking):
         v["release_date"] = vuln.release_date
     v["product_status"] = {s: status[s] for s in STATUSES if status.get(s)}
     if vuln.scores and affected:
-        scores = {}
+        scores = {}   # products -> score object; CSAF: one cvss_v3 and one cvss_v2 per score object
         for score in vuln.scores:
+            pids = affected_named(score.product_names) if score.product_names else affected
+            if not pids:
+                continue
             key, body = _cvss(score)
-            scores.setdefault(key, body)   # CSAF: one cvss_v3 and one cvss_v2 per score object
-        v["scores"] = [{"products": affected, **scores}]
+            scores.setdefault(tuple(pids), {}).setdefault(key, body)
+        if scores:
+            v["scores"] = [{"products": list(pids), **body} for pids, body in scores.items()]
     remediations = []
     for r in vuln.remediations:
-        pids = list(dict.fromkeys(ids[k] for k in r.product_keys if k in ids)) or affected
+        pids = list(dict.fromkeys([ids[k] for k in r.product_keys if k in ids]
+                                  + affected_named(r.product_names)))
+        if not pids and not r.product_names:
+            pids = affected
         if not pids:
             continue
         item = {"category": r.category, "details": r.details, "product_ids": pids}

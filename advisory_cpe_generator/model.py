@@ -57,6 +57,8 @@ class Score:
     version: str          # CVSS "2.0", "3.0" or "3.1" (the versions CSAF 2.0 supports)
     vector: str
     base_score: float
+    # Product names it applies to (their known_affected versions); empty = every known_affected product.
+    product_names: list = field(default_factory=list)
 
 
 @dataclass
@@ -71,8 +73,10 @@ class Remediation:
     category: str         # vendor_fix | workaround | mitigation | no_fix_planned | none_available
     details: str
     url: str = None
-    # Product keys it applies to; empty = every known_affected product.
+    # Products it applies to: by key, or every known_affected version of the named
+    # products; both empty = every known_affected product.
     product_keys: list = field(default_factory=list)
+    product_names: list = field(default_factory=list)
 
 
 @dataclass
@@ -108,10 +112,11 @@ class Vulnerability:
 
         self.title = self.title or other.title
         extend(self.cwes, other.cwes, lambda c: tuple(c))
-        extend(self.scores, other.scores, lambda s: s.vector)
+        extend(self.scores, other.scores, lambda s: (s.vector, tuple(s.product_names)))
         extend(self.products, other.products, lambda p: p.key())
         extend(self.references, other.references, lambda r: r.url)
-        extend(self.remediations, other.remediations, lambda r: (r.category, r.details))
+        extend(self.remediations, other.remediations,
+               lambda r: (r.category, r.details, tuple(map(tuple, r.product_keys)), tuple(r.product_names)))
         extend(self.notes, other.notes, lambda n: (n.category, n.text))
         extend(self.advisory_ids, other.advisory_ids, lambda a: a)
         if other.release_date and (not self.release_date or other.release_date < self.release_date):

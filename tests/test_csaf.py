@@ -27,6 +27,8 @@ from conftest import FIXTURES
 def _vulns(config):
     yield StormshieldAdapter(connector_config(config, "stormshield")).parse_file(
         FIXTURES / "stormshield_2025-006.html", {"products": ["Stormshield Network VPN Client"]})[1][0]
+    yield StormshieldAdapter(connector_config(config, "stormshield")).parse_file(
+        FIXTURES / "stormshield_2014-003_reconstructed.html")[1][0]
     for name in ("pan_cve_2024_0012.json", "pan_cve_2024_3400.json"):
         yield PaloAltoAdapter(connector_config(config, "paloalto")).parse_file(FIXTURES / name)[1][0]
     yield CiscoAdapter(connector_config(config, "cisco")).parse_file(
@@ -108,3 +110,27 @@ def test_storage_versioning(tmp_path, config):
     storage.write_indexes("stormshield")
     assert (tmp_path / "stormshield" / "index.txt").read_text() == name + "\n"
     assert name in (tmp_path / "stormshield" / "changes.csv").read_text()
+
+
+def test_scores_and_remediations_per_product(config):
+    [v] = StormshieldAdapter(connector_config(config, "stormshield")).parse_file(FIXTURES / "stormshield_2014-003_reconstructed.html")[1]
+    doc = csaf_writer.build_document(v, config, {"id": "x", "status": "final", "version": "1",
+                                     "initial_release_date": "2026-01-01T00:00:00Z",
+                                     "current_release_date": "2026-01-01T00:00:00Z",
+                                     "revision_history": [{"number": "1", "date": "2026-01-01T00:00:00Z",
+                                                           "summary": "x"}]})
+    names = {}
+
+    def walk(branches):
+        for b in branches:
+            if "product" in b:
+                names[b["product"]["product_id"]] = b["product"]["name"]
+            walk(b.get("branches", []))
+    walk(doc["product_tree"]["branches"])
+    vuln = doc["vulnerabilities"][0]
+    fast = [s for s in vuln["scores"] if s["cvss_v2"]["baseScore"] == 6.1]
+    assert [names[pid] for s in fast for pid in s["products"]] == [
+        "Stormshield Fast360 vers:generic/>=5.0/16|<=5.0/32", "Stormshield Fast360 vers:generic/>=6.0/1|<=6.0/6"]
+    fix = next(r for r in vuln["remediations"] if r["category"] == "vendor_fix")
+    assert [names[pid] for pid in fix["product_ids"]] == ["Stormshield Endpoint Security 6.0.15",
+                                                          "Stormshield Endpoint Security 7.1.02"]
