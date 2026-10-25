@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "advisory_cpe_generator"
+version = "0.1.0"
+description = "One CSAF 2.0 advisory per vendor and CVE, enriched with CPE identifiers"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.9"
+dependencies = ["requests", "beautifulsoup4"]
+
+[project.optional-dependencies]
+nvd = ["numpy", "python-Levenshtein"]
+test = ["pytest", "jsonschema"]
+
+[project.scripts]
+advisory-cpe-generator = "advisory_cpe_generator.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["advisory_cpe_generator*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]

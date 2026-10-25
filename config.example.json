@@ -1,0 +1,42 @@
+{
+  "output_dir": "output",
+  "publisher": {
+    "category": "translator",
+    "name": "advisory_cpe_generator",
+    "namespace": "https://github.com/ellipse2v/advisory_cpe_generator"
+  },
+  "tlp": "WHITE",
+  "proxy": {
+    "http": "",
+    "https": "",
+    "no_proxy": ""
+  },
+  "http": {"timeout": 30, "retries": 3},
+  "logging": {"level": "INFO", "file": ""},
+  "cpe": {
+    "mapping_csv": "cpe_mapping.csv",
+    "matcher_path": "../cpeMiniLLMLevenshtein",
+    "use_dictionary": true,
+    "use_semantic_matcher": false,
+    "min_score": 0.65,
+    "expand_ranges": true,
+    "review_csv": "cpe_review.csv"
+  },
+  "connectors": {
+    "stormshield": {
+      "enabled": true,
+      "base_url": "https://advisories.stormshield.eu",
+      "delay": 1.0
+    },
+    "cisco": {
+      "enabled": false,
+      "client_id_env": "CISCO_CLIENT_ID",
+      "client_secret_env": "CISCO_CLIENT_SECRET",
+      "proxy": {"https": ""}
+    },
+    "paloalto": {
+      "enabled": true,
+      "delay": 0.5
+    }
+  }
+}

@@ -1,0 +1,8 @@
+requests
+beautifulsoup4
+# NVD dictionary lookups through cpeMiniLLMLevenshtein (cpe.matcher_path)
+numpy
+python-Levenshtein
+# tests
+pytest
+jsonschema
