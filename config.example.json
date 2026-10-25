@@ -37,6 +37,14 @@
     "paloalto": {
       "enabled": true,
       "delay": 0.5
+    },
+    "oracle": {
+      "enabled": true,
+      "delay": 1.0
+    },
+    "fortinet": {
+      "enabled": true,
+      "delay": 1.0
     }
   }
 }

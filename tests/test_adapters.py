@@ -11,7 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from advisory_cpe_generator.adapters import CiscoAdapter, PaloAltoAdapter, StormshieldAdapter
+from advisory_cpe_generator.adapters import (CiscoAdapter, FortinetAdapter, OracleAdapter, PaloAltoAdapter,
+                                             StormshieldAdapter)
 from advisory_cpe_generator.adapters.stormshield import parse_versions
 from advisory_cpe_generator.config import connector_config
 from advisory_cpe_generator.model import FIXED, KNOWN_AFFECTED, KNOWN_NOT_AFFECTED
@@ -93,7 +94,9 @@ class FakeHttp:
         self.pages = pages
 
     def get(self, url, **kwargs):
-        return type("R", (), {"content": self.pages[url]})()
+        body = self.pages[url]
+        body = body.encode() if isinstance(body, str) else body
+        return type("R", (), {"content": body, "text": body.decode("utf-8")})()
 
     def get_json(self, url, **kwargs):
         import json
@@ -124,3 +127,76 @@ def test_paloalto_list_and_fetch(config):
     [ref] = adapter.list_advisories()
     [v] = adapter.fetch(ref)
     assert v.cve == "CVE-2024-0012"
+
+
+def test_oracle_cpu_csaf(config):
+    adapter = OracleAdapter(connector_config(config, "oracle"))
+    adv_id, vulns = adapter.parse_file(FIXTURES / "oracle_cpujul2026_excerpt.json")
+    assert adv_id == "CPUJul2026csaf"
+    by_cve = {v.cve: v for v in vulns}
+    v = by_cve["CVE-2014-3643"]
+    [p] = v.products
+    # "Oracle Enterprise Manager for Fusion Middleware(...) Version 13.5" -> 13.5
+    assert (p.name, p.version) == ("Oracle Enterprise Manager for Fusion Middleware", "13.5")
+    assert p.cpe == "cpe:2.3:a:oracle:enterprise_manager_for_fusion_middleware:13.5:*:*:*:*:*:*:*"
+    assert v.scores[0].vector.startswith("CVSS:3.1/")
+    assert by_cve["CVE-2020-8908"].products[0].status == KNOWN_NOT_AFFECTED
+
+
+def test_oracle_list_and_fetch(config):
+    alerts = '<a href="/security-alerts/cpujul2026.html">July 2026</a><a href="/security-alerts/cpujul2026.html">x</a>'
+    cpu = '<a href="https://www.oracle.com/docs/tech/security-alerts/cpujul2026csaf.json">CSAF</a>'
+    http = FakeHttp({"https://www.oracle.com/security-alerts/": alerts,
+                     "https://www.oracle.com/security-alerts/cpujul2026.html": cpu,
+                     "https://www.oracle.com/docs/tech/security-alerts/cpujul2026csaf.json":
+                         (FIXTURES / "oracle_cpujul2026_excerpt.json").read_text()})
+    adapter = OracleAdapter(connector_config(config, "oracle"), http=http)
+    [ref] = adapter.list_advisories()
+    assert ref.id == "cpujul2026"
+    assert len(adapter.fetch(ref)) == 3
+
+
+def test_cvrf_matches_csaf_of_same_advisory(config):
+    """
+    OASIS publishes cisco-sa-20180328-smi2 in both formats (not the same revision,
+    so the version lists differ a little): same CVE, product names, score.
+    """
+    cvrf_id, [from_cvrf] = FortinetAdapter(connector_config(config, "fortinet")).parse_file(
+        FIXTURES / "cisco-sa-20180328-smi2_cvrf.xml")
+    _, [from_csaf] = CiscoAdapter(connector_config(config, "cisco")).parse_file(
+        FIXTURES / "cisco-sa-20180328-smi2.json")
+    assert cvrf_id == "cisco-sa-20180328-smi2"
+    assert from_cvrf.cve == from_csaf.cve
+    assert {p.name for p in from_cvrf.products} == {p.name for p in from_csaf.products}
+    common = {(p.name, p.version) for p in from_cvrf.products} & {(p.name, p.version) for p in from_csaf.products}
+    assert ("IOS", "12.2(55)SE") in common and len(common) > 150
+    assert from_cvrf.scores[0] == from_csaf.scores[0]
+    assert from_cvrf.remediations[0].category == "workaround"
+
+
+# RSS item shape as described for filestore.fortinet.com/fortiguard/rss/ir.xml (not a copy of the feed).
+RSS = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:csaf="https://fortiguard.fortinet.com/rss/ns/csaf"
+     xmlns:cvrf="https://fortiguard.fortinet.com/rss/ns/cvrf"><channel>
+<item><title>Example with CSAF</title><link>https://fortiguard.fortinet.com/psirt/FG-IR-26-186</link>
+<pubDate>Wed, 21 Oct 2026 00:00:00 -0700</pubDate>
+<csaf:link>https://filestore.fortinet.com/fortiguard/psirt/csaf_example_fg-ir-26-186.json</csaf:link>
+<cvrf:link>https://fortiguard.fortinet.com/psirt/cvrf/FG-IR-26-186</cvrf:link></item>
+<item><title>Example with CVRF only</title><link>https://fortiguard.fortinet.com/psirt/FG-IR-20-005</link>
+<pubDate>Tue, 13 Oct 2026 00:00:00 -0700</pubDate>
+<cvrf:link>https://fortiguard.fortinet.com/psirt/cvrf/FG-IR-20-005</cvrf:link></item>
+</channel></rss>"""
+
+
+def test_fortinet_rss_prefers_csaf_then_cvrf(config):
+    http = FakeHttp({
+        "https://filestore.fortinet.com/fortiguard/rss/ir.xml": RSS,
+        "https://filestore.fortinet.com/fortiguard/psirt/csaf_example_fg-ir-26-186.json":
+            (FIXTURES / "cisco-sa-20180328-smi2.json").read_text(),
+        "https://fortiguard.fortinet.com/psirt/cvrf/FG-IR-20-005":
+            (FIXTURES / "cisco-sa-20180328-smi2_cvrf.xml").read_bytes()})
+    adapter = FortinetAdapter(connector_config(config, "fortinet"), http=http)
+    a, b = adapter.list_advisories()
+    assert (a.id, a.extra["format"], a.updated) == ("FG-IR-26-186", "csaf", "2026-10-21")
+    assert (b.id, b.extra["format"]) == ("FG-IR-20-005", "cvrf")
+    assert adapter.fetch(a)[0].vendor == adapter.fetch(b)[0].vendor == "fortinet"

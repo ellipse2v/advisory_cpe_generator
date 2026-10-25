@@ -32,6 +32,18 @@ _STATUS = {
 _VERSION_CATEGORIES = ("product_version", "service_pack", "patch_level", "product_version_range")
 
 
+def _version_text(branch_name, product_name):
+    """
+    Version branches sometimes repeat the product name (Oracle: "Oracle APEX
+    Version 24.1", "X(X_Component) Version 11.4.0"): keep what follows.
+    """
+    if " Version " in branch_name:
+        return branch_name.rsplit(" Version ", 1)[1].strip()
+    if product_name and branch_name.startswith(product_name + " "):
+        return branch_name[len(product_name):].strip()
+    return branch_name
+
+
 def _product(full, path, default_vendor):
     vendor = next((n for c, n in reversed(path) if c == "vendor"), default_vendor)
     name = next((n for c, n in reversed(path) if c == "product_name"), None) \
@@ -42,6 +54,7 @@ def _product(full, path, default_vendor):
     p = Product(vendor=vendor, name=name, cpe=helper.get("cpe"), purl=helper.get("purl"))
     if version_branch:
         category, value = version_branch
+        value = _version_text(value, name)
         if category == "product_version_range":
             p.raw_range = value
         else:
@@ -77,13 +90,16 @@ def parse_csaf(doc, vendor, vendor_name):
     catalog = products_by_id(doc, vendor_name)
     doc_refs = [Reference(r["url"], r.get("summary") or r["url"]) for r in document.get("references", [])]
 
+    # The document title describes the vulnerability only in a one-CVE advisory
+    # (not in Oracle's quarterly CPU).
+    single_title = document.get("title") if len(doc.get("vulnerabilities", [])) == 1 else None
     out = []
     for v in doc.get("vulnerabilities", []):
         cve = v.get("cve")
         if not cve:
             continue
         vuln = Vulnerability(vendor=vendor, vendor_name=vendor_name, cve=cve.upper(),
-                             title=v.get("title") or document.get("title"), advisory_ids=[advisory_id],
+                             title=v.get("title") or single_title, advisory_ids=[advisory_id],
                              release_date=v.get("release_date") or tracking.get("initial_release_date"))
         by_pid = {}
         for status, pids in v.get("product_status", {}).items():

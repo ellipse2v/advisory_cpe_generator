@@ -3,6 +3,8 @@ beautifulsoup4
 # NVD dictionary lookups through cpeMiniLLMLevenshtein (cpe.matcher_path)
 numpy
 python-Levenshtein
+# optional: recovers slightly malformed CVRF XML
+lxml
 # tests
 pytest
 jsonschema

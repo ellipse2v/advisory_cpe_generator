@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from .cisco import CiscoAdapter
+from .fortinet import FortinetAdapter
+from .oracle import OracleAdapter
 from .paloalto import PaloAltoAdapter
 from .stormshield import StormshieldAdapter
 
-ADAPTERS = {a.vendor: a for a in (StormshieldAdapter, CiscoAdapter, PaloAltoAdapter)}
+ADAPTERS = {a.vendor: a for a in (StormshieldAdapter, CiscoAdapter, PaloAltoAdapter, OracleAdapter,
+                                  FortinetAdapter)}

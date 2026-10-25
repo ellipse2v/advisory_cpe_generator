@@ -58,7 +58,8 @@ def _product_tree(vuln):
             continue
         pid = f"CSAFPID-{len(ids) + 1:04d}"
         ids[product.key()] = pid
-        full = {"name": " ".join(x for x in (product.vendor, product.name, product.label()) if x),
+        vendor_prefix = None if product.name.lower().startswith(product.vendor.lower()) else product.vendor
+        full = {"name": " ".join(x for x in (vendor_prefix, product.name, product.label()) if x),
                 "product_id": pid}
         helper = {k: v for k, v in (("cpe", product.cpe), ("purl", product.purl)) if v}
         if helper:
@@ -124,7 +125,7 @@ def build_document(vuln, config, tracking):
         v["scores"] = [{"products": affected, **scores}]
     remediations = []
     for r in vuln.remediations:
-        pids = [ids[k] for k in r.product_keys if k in ids] or affected
+        pids = list(dict.fromkeys(ids[k] for k in r.product_keys if k in ids)) or affected
         if not pids:
             continue
         item = {"category": r.category, "details": r.details, "product_ids": pids}

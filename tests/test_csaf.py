@@ -14,7 +14,8 @@
 import json
 
 from advisory_cpe_generator import csaf_writer
-from advisory_cpe_generator.adapters import CiscoAdapter, PaloAltoAdapter, StormshieldAdapter
+from advisory_cpe_generator.adapters import (CiscoAdapter, FortinetAdapter, OracleAdapter, PaloAltoAdapter,
+                                             StormshieldAdapter)
 from advisory_cpe_generator.config import connector_config
 from advisory_cpe_generator.enricher import CpeEnricher
 from advisory_cpe_generator.model import Product, Vulnerability, merge_by_cve
@@ -30,6 +31,10 @@ def _vulns(config):
         yield PaloAltoAdapter(connector_config(config, "paloalto")).parse_file(FIXTURES / name)[1][0]
     yield CiscoAdapter(connector_config(config, "cisco")).parse_file(
         FIXTURES / "cisco-sa-20180328-smi2.json")[1][0]
+    yield from OracleAdapter(connector_config(config, "oracle")).parse_file(
+        FIXTURES / "oracle_cpujul2026_excerpt.json")[1]
+    yield FortinetAdapter(connector_config(config, "fortinet")).parse_file(
+        FIXTURES / "cisco-sa-20180328-smi2_cvrf.xml")[1][0]
 
 
 def _tracking(tid):

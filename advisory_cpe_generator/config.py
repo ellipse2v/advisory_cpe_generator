@@ -70,6 +70,16 @@ DEFAULTS = {
             "detail_url": "https://security.paloaltonetworks.com/json/{id}",
             "delay": 0.5,
         },
+        "oracle": {
+            "enabled": True,
+            "alerts_url": "https://www.oracle.com/security-alerts/",
+            "delay": 1.0,
+        },
+        "fortinet": {
+            "enabled": True,
+            "rss_url": "https://filestore.fortinet.com/fortiguard/rss/ir.xml",
+            "delay": 1.0,
+        },
     },
 }
 

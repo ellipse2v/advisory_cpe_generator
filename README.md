@@ -14,6 +14,8 @@ of these identifies the product, the product is written without a CPE and listed
 | Stormshield | https://advisories.stormshield.eu (HTML pages) | No |
 | Cisco | openVuln API, then each advisory's CSAF document | Sometimes (`product_identification_helper`) |
 | Palo Alto Networks | https://security.paloaltonetworks.com/api (`/json`, `/json/{ID}`): CVE JSON 5 records | Yes on recent records (`cpes`) |
+| Oracle | Critical Patch Update CSAF, one per quarter (linked from each `cpu<mon><year>.html`), split per CVE | Yes |
+| Fortinet | FortiGuard PSIRT RSS feed, then each advisory's CSAF document, or its CVRF 1.2 document when it has no CSAF | CSAF: depends on the document; CVRF: no |
 
 ## Installation
 
@@ -34,8 +36,8 @@ python -m advisory_cpe_generator --config config.json --rebuild            # no 
 python -m advisory_cpe_generator --config config.json --vendor cisco --file downloaded_csaf/*.json
 ```
 
-`--file` parses local files instead of fetching: Cisco CSAF documents or Palo Alto CVE JSON 5
-records. (A saved Stormshield page lacks the product list, which is on the home page, so its
+`--file` parses local files instead of fetching: Cisco, Oracle or Fortinet CSAF documents,
+Fortinet CVRF 1.2 files (`.xml`), or Palo Alto CVE JSON 5 records. (A saved Stormshield page lacks the product list, which is on the home page, so its
 CVEs are skipped.)
 
 Cisco needs openVuln API credentials in the environment (never in a file of the repository):
@@ -123,8 +125,19 @@ pytest
 ```
 
 The tests run on real data, offline: a Stormshield advisory page, two Palo Alto CVE records
-(from CVEProject/cvelistV5) and the OASIS Cisco CSAF example. Every generated document is
+(from CVEProject/cvelistV5), the OASIS Cisco example in CSAF and in CVRF 1.2, and an excerpt
+of Oracle's July 2026 CPU CSAF (3 CVEs). Every generated document is
 validated against the CSAF 2.0 JSON schema (with the FIRST CVSS schemas).
+
+### Vendor notes
+
+- **Oracle**: only the quarterly CPUs have a CSAF document; out-of-band Security Alerts and
+  the Linux/Solaris bulletins are not covered. A CPU document is fetched once; `--full`
+  fetches revised ones again. Oracle's own CPEs are kept as published, including the few
+  where a version range is written in the CPE version field.
+- **Fortinet**: the RSS feed lists the latest advisories only (50), so the first run covers
+  those and later runs keep up. CVRF files are read with a generic CVRF 1.2 reader
+  (`cvrf_reader.py`), which also reads other vendors' CVRF.
 
 ## Not verified yet
 
@@ -134,9 +147,15 @@ These parts were written from the documentation without access to the live servi
   `cveId`, `updated`, ...). `PAN-SA-*` bulletins that are not CVE records are skipped.
 - Cisco openVuln: advisories are expected to carry a `csafUrl`.
 - Stormshield: the page layout of other advisories than the one in `tests/fixtures`.
+- Fortinet: the RSS feed, CSAF and CVRF files (the structure was read through a summarising
+  web fetch, not downloaded). The CVRF reader is tested on the OASIS CVRF 1.2 example.
+
+Verified live: Oracle (the October 2026 CPU gives 1,739 documents, all valid against the
+CSAF schema, every product with Oracle's CPE).
 
 ## License
 
 Apache License 2.0. `tests/schemas/cvss-v*.json`: Copyright (c) FIRST.ORG, Inc. (BSD-style
 license in each file). `tests/schemas/csaf_json_schema.json` and
-`tests/fixtures/cisco-sa-20180328-smi2.json`: OASIS CSAF TC.
+`tests/fixtures/cisco-sa-20180328-smi2.json` and `cisco-sa-20180328-smi2_cvrf.xml`: OASIS CSAF TC.
+`tests/fixtures/oracle_cpujul2026_excerpt.json`: excerpt of Oracle's published CSAF.
