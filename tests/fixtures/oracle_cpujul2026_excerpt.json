@@ -1,0 +1,332 @@
+{
+ "document": {
+  "category": "csaf_security_advisory",
+  "csaf_version": "2.0",
+  "distribution": {
+   "text": "Copyright © Oracle. All rights reserved.",
+   "tlp": {
+    "label": "WHITE",
+    "url": "https://www.first.org/tlp"
+   }
+  },
+  "lang": "en",
+  "publisher": {
+   "category": "vendor",
+   "name": "Oracle",
+   "namespace": "https://www.oracle.com"
+  },
+  "references": [
+   {
+    "summary": "URL to html version of Advisory",
+    "url": "https://www.oracle.com/security-alerts/cpujul2026.html"
+   },
+   {
+    "category": "self",
+    "summary": "URL to CSAF version of Advisory",
+    "url": "https://www.oracle.com/docs/tech/security-alerts/cpujul2026csaf.json"
+   }
+  ],
+  "title": "Oracle Critical Patch Update Advisory - July 2026 - Oracle CSAF",
+  "tracking": {
+   "current_release_date": "2026-07-21T13:00:00-07:00",
+   "id": "CPUJul2026csaf",
+   "initial_release_date": "2026-07-21T13:00:00-07:00",
+   "revision_history": [
+    {
+     "date": "2026-07-21T13:00:00-07:00",
+     "number": "1",
+     "summary": "Initial Release"
+    }
+   ],
+   "status": "final",
+   "version": "1"
+  },
+  "notes": []
+ },
+ "product_tree": {
+  "branches": [
+   {
+    "branches": [
+     {
+      "branches": [
+       {
+        "branches": [
+         {
+          "category": "product_version",
+          "name": "Oracle Commerce Guided Search Platform Services(Oracle Commerce Guided Search Platform Services_Forge) Version 11.4.0",
+          "product": {
+           "name": "Oracle Commerce Guided Search Platform Services(Oracle Commerce Guided Search Platform Services_Forge) Version 11.4.0",
+           "product_id": "P-9633(Oracle Commerce Guided Search Platform Services_Forge)V-11.4.0",
+           "product_identification_helper": {
+            "cpe": "cpe:2.3:a:oracle:commerce_guided_search_platform_services:11.4.0:*:*:*:*:*:*:*"
+           }
+          }
+         }
+        ],
+        "category": "product_name",
+        "name": "Oracle Commerce Guided Search Platform Services"
+       }
+      ],
+      "category": "product_family",
+      "name": "Oracle Commerce"
+     },
+     {
+      "branches": [
+       {
+        "branches": [
+         {
+          "category": "product_version",
+          "name": "Oracle Communications Unified Inventory Management Version 7.7.0",
+          "product": {
+           "name": "Oracle Communications Unified Inventory Management Version 7.7.0",
+           "product_id": "P-4516V-7.7.0",
+           "product_identification_helper": {
+            "cpe": "cpe:2.3:a:oracle:communications_unified_inventory_management:7.7.0:*:*:*:*:*:*:*"
+           }
+          }
+         },
+         {
+          "category": "product_version",
+          "name": "Oracle Communications Unified Inventory Management Version 7.8.0",
+          "product": {
+           "name": "Oracle Communications Unified Inventory Management Version 7.8.0",
+           "product_id": "P-4516V-7.8.0",
+           "product_identification_helper": {
+            "cpe": "cpe:2.3:a:oracle:communications_unified_inventory_management:7.8.0:*:*:*:*:*:*:*"
+           }
+          }
+         },
+         {
+          "category": "product_version",
+          "name": "Oracle Communications Unified Inventory Management Version 8.0.1",
+          "product": {
+           "name": "Oracle Communications Unified Inventory Management Version 8.0.1",
+           "product_id": "P-4516V-8.0.1",
+           "product_identification_helper": {
+            "cpe": "cpe:2.3:a:oracle:communications_unified_inventory_management:8.0.1:*:*:*:*:*:*:*"
+           }
+          }
+         }
+        ],
+        "category": "product_name",
+        "name": "Oracle Communications Unified Inventory Management"
+       }
+      ],
+      "category": "product_family",
+      "name": "Oracle Communications"
+     },
+     {
+      "branches": [
+       {
+        "branches": [
+         {
+          "category": "product_version",
+          "name": "Oracle Enterprise Manager for Fusion Middleware(Oracle Enterprise Manager for Fusion Middleware_Web Services Management) Version 13.5",
+          "product": {
+           "name": "Oracle Enterprise Manager for Fusion Middleware(Oracle Enterprise Manager for Fusion Middleware_Web Services Management) Version 13.5",
+           "product_id": "P-1369(Oracle Enterprise Manager for Fusion Middleware_Web Services Management)V-13.5",
+           "product_identification_helper": {
+            "cpe": "cpe:2.3:a:oracle:enterprise_manager_for_fusion_middleware:13.5:*:*:*:*:*:*:*"
+           }
+          }
+         }
+        ],
+        "category": "product_name",
+        "name": "Oracle Enterprise Manager for Fusion Middleware"
+       }
+      ],
+      "category": "product_family",
+      "name": "Oracle Enterprise Manager"
+     },
+     {
+      "branches": [
+       {
+        "branches": [
+         {
+          "category": "product_version_range",
+          "name": "GoldenGate Stream Analytics(GoldenGate Stream Analytics_Security) Version 19.1.0.0.0-19.1.0.0.15",
+          "product": {
+           "name": "GoldenGate Stream Analytics(GoldenGate Stream Analytics_Security) Version 19.1.0.0.0-19.1.0.0.15",
+           "product_id": "P-14015(GoldenGate Stream Analytics_Security)V-19.1.0.0.0-19.1.0.0.15",
+           "product_identification_helper": {
+            "cpe": "cpe:2.3:a:oracle:goldengate_stream_analytics:19.1.0.0.0-19.1.0.0.15:*:*:*:*:*:*:*"
+           }
+          }
+         }
+        ],
+        "category": "product_name",
+        "name": "GoldenGate Stream Analytics"
+       }
+      ],
+      "category": "product_family",
+      "name": "Oracle GoldenGate"
+     }
+    ],
+    "category": "vendor",
+    "name": "Oracle"
+   }
+  ]
+ },
+ "vulnerabilities": [
+  {
+   "cve": "CVE-2020-8908",
+   "flags": [
+    {
+     "date": "2026-07-21T13:00:00-07:00",
+     "label": "vulnerable_code_not_in_execute_path",
+     "product_ids": [
+      "P-14015(GoldenGate Stream Analytics_Security)V-19.1.0.0.0-19.1.0.0.15"
+     ]
+    }
+   ],
+   "ids": [
+    {
+     "system_name": "Oracle Bug ID of GoldenGate Stream Analytics",
+     "text": "39440144"
+    }
+   ],
+   "notes": [
+    {
+     "category": "description",
+     "text": "Security-in-Depth issue in the GoldenGate Stream Analytics product of Oracle GoldenGate (component: Security (Google Guava)). This vulnerability cannot be exploited in the context of this product.",
+     "title": "Vulnerability Description"
+    }
+   ],
+   "product_status": {
+    "known_not_affected": [
+     "P-14015(GoldenGate Stream Analytics_Security)V-19.1.0.0.0-19.1.0.0.15"
+    ]
+   },
+   "remediations": [
+    {
+     "category": "vendor_fix",
+     "details": "Oracle customers with valid support contracts",
+     "product_ids": [
+      "P-14015(GoldenGate Stream Analytics_Security)V-19.1.0.0.0-19.1.0.0.15"
+     ],
+     "url": "https://support.oracle.com/support/?documentId=CPU199"
+    }
+   ],
+   "scores": [
+    {
+     "cvss_v3": {
+      "baseScore": 0.0,
+      "baseSeverity": "NONE",
+      "vectorString": "CVSS:3.1/AV:L/AC:H/PR:H/UI:R/S:U/C:N/I:N/A:N",
+      "version": "3.1"
+     },
+     "products": [
+      "P-14015(GoldenGate Stream Analytics_Security)V-19.1.0.0.0-19.1.0.0.15"
+     ]
+    }
+   ],
+   "threats": [
+    {
+     "category": "impact",
+     "date": "2026-07-21T13:00:00-07:00",
+     "details": "The affected code is not reachable through the execution of the code, including non-anticipated states of the product. Components that are neither used nor executed by the product.",
+     "product_ids": [
+      "P-14015(GoldenGate Stream Analytics_Security)V-19.1.0.0.0-19.1.0.0.15"
+     ]
+    }
+   ]
+  },
+  {
+   "cve": "CVE-2014-3643",
+   "ids": [
+    {
+     "system_name": "Oracle Bug ID of Oracle Enterprise Manager for Fusion Middleware",
+     "text": "39106493"
+    }
+   ],
+   "notes": [
+    {
+     "category": "description",
+     "text": "Vulnerability in the Oracle Enterprise Manager for Fusion Middleware product of Oracle Enterprise Manager (component: Web Services Management (Eclipse Jersey)).   The supported version that is affected is 13.5. Easily exploitable vulnerability allows unauthenticated attacker with network access via HTTPS to compromise Oracle Enterprise Manager for Fusion Middleware.  Successful attacks of this vulnerability can result in  unauthorized access to critical data or complete access to all Oracle Enterprise Manager for Fusion Middleware accessible data. CVSS 3.1 Base Score 7.5 (Confidentiality impacts).  CVSS Vector: (CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N).",
+     "title": "Vulnerability Description"
+    }
+   ],
+   "product_status": {
+    "known_affected": [
+     "P-1369(Oracle Enterprise Manager for Fusion Middleware_Web Services Management)V-13.5"
+    ]
+   },
+   "remediations": [
+    {
+     "category": "vendor_fix",
+     "details": "Oracle customers with valid support contracts",
+     "product_ids": [
+      "P-1369(Oracle Enterprise Manager for Fusion Middleware_Web Services Management)V-13.5"
+     ],
+     "url": "https://support.oracle.com/support/?documentId=CPU231"
+    }
+   ],
+   "scores": [
+    {
+     "cvss_v3": {
+      "baseScore": 7.5,
+      "baseSeverity": "HIGH",
+      "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+      "version": "3.1"
+     },
+     "products": [
+      "P-1369(Oracle Enterprise Manager for Fusion Middleware_Web Services Management)V-13.5"
+     ]
+    }
+   ]
+  },
+  {
+   "cve": "CVE-2025-13034",
+   "ids": [
+    {
+     "system_name": "Oracle Bug ID of Oracle Communications Unified Inventory Management",
+     "text": "38858214"
+    },
+    {
+     "system_name": "Oracle Bug ID of Oracle Commerce Guided Search Platform Services",
+     "text": "38858209"
+    }
+   ],
+   "notes": [
+    {
+     "category": "description",
+     "text": "Vulnerability in the Oracle Commerce Guided Search Platform Services product of Oracle Commerce (component: Forge (curl)).   The supported version that is affected is 11.4.0. Difficult to exploit vulnerability allows unauthenticated attacker with logon to the infrastructure where Oracle Commerce Guided Search Platform Services executes to compromise Oracle Commerce Guided Search Platform Services.  Successful attacks require human interaction from a person other than the attacker. Successful attacks of this vulnerability can result in  unauthorized creation, deletion or modification access to critical data or all Oracle Commerce Guided Search Platform Services accessible data as well as  unauthorized access to critical data or complete access to all Oracle Commerce Guided Search Platform Services accessible data.",
+     "title": "Vulnerability Description"
+    },
+    {
+     "category": "description",
+     "text": "Vulnerability in the Oracle Communications Unified Inventory Management product of Oracle Communications (component: Security Component (curl)).  Supported versions that are affected are 7.7.0, 7.8.0 and  8.0.1. Difficult to exploit vulnerability allows unauthenticated attacker with logon to the infrastructure where Oracle Communications Unified Inventory Management executes to compromise Oracle Communications Unified Inventory Management.  Successful attacks require human interaction from a person other than the attacker. Successful attacks of this vulnerability can result in  unauthorized creation, deletion or modification access to critical data or all Oracle Communications Unified Inventory Management accessible data as well as  unauthorized access to critical data or complete access to all Oracle Communications Unified Inventory Management accessible data.",
+     "title": "Vulnerability Description"
+    }
+   ],
+   "product_status": {
+    "known_affected": [
+     "P-9633(Oracle Commerce Guided Search Platform Services_Forge)V-11.4.0",
+     "P-4516V-8.0.1",
+     "P-4516V-7.7.0",
+     "P-4516V-7.8.0"
+    ]
+   },
+   "remediations": [
+    {
+     "category": "vendor_fix",
+     "details": "Oracle customers with valid support contracts",
+     "product_ids": [
+      "P-9633(Oracle Commerce Guided Search Platform Services_Forge)V-11.4.0"
+     ],
+     "url": "https://support.oracle.com/support/?documentId=CPU274"
+    },
+    {
+     "category": "vendor_fix",
+     "details": "Oracle customers with valid support contracts",
+     "product_ids": [
+      "P-4516V-7.7.0",
+      "P-4516V-7.8.0",
+      "P-4516V-8.0.1"
+     ],
+     "url": "https://support.oracle.com/support/?documentId=CPU224"
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<!-- Reconstructed for the tests from the text of https://advisories.stormshield.eu/424/
+     (STORM-2014-003, old page layout); the markup is an approximation, the text is the page's. -->
+<html><head><title>OpenSSL vulnerability [CVE-2014-3567] | Stormshield security</title></head><body>
+<article><h1 class="entry-title">OpenSSL vulnerability [CVE-2014-3567]</h1>
+<div class="entry-content">
+<table><tr><th>Advisory ID</th><th>CVE Number</th><th>Date discovered</th><th>Severity</th><th>Advisory revision</th></tr>
+<tr><td>STORM-2014-003</td><td>CVE-2014-3567</td><td>10/16/2014</td><td>medium</td><td>v1</td></tr></table>
+<h2>Vulnerability details</h2>
+<p>A memory leak allows remote attackers to cause a denial of service via a crafted session ticket that triggers an integrity-check failure.</p>
+<h2>Impacted products</h2>
+<table><tr><th>Products</th><th>Severity</th><th>Detail</th></tr>
+<tr><td>Stormshield Network Security</td><td>low</td><td>SNS uses a vulnerable version of OpenSSL</td></tr>
+<tr><td>Stormshield Endpoint Security</td><td>medium</td><td>SES uses a vulnerable version of OpenSSL</td></tr>
+<tr><td>Fast360</td><td>medium</td><td>Fast360 uses a vulnerable version of OpenSSL</td></tr>
+<tr><td>Netasq</td><td>low</td><td>Netasq uses a vulnerable version of OpenSSL</td></tr></table>
+<h2>Revisions</h2>
+<table><tr><th>Version</th><th>Date</th><th>Description</th></tr>
+<tr><td>v1</td><td>10/23/2014</td><td>Initial release</td></tr></table>
+<table><tr><td><h2 class="product">Stormshield Network Security</h2></td><td>CVSS v2 Overall Score: 2.8</td></tr></table>
+<table><tr><td><h2>Analysis</h2></td><td><h2>Impacted version</h2></td></tr>
+<tr><td><p>The vulnerability can be exploited on the SSL proxy and administration and authentication portal components.</p><p>The attack can be performed when these services are available on the attacker’s network.</p></td><td><ul><li>SNS 1.0.0 to 1.1.3</li></ul></td></tr>
+<tr><td><h2>Workaround solution</h2></td><td><h2>Solution</h2></td></tr>
+<tr><td><p>Disable the implicit filtering rules on authentication, webadmin and SSL VPN, then replace them with more restrictive rules on sources of connections.</p></td><td><p>A new version of the product will provide the security patches needed.</p></td></tr></table>
+<table><tr><td>Access vector</td><td>Access complexity</td><td>Authentication</td><td>Confidentiality impact</td><td>Integrity impact</td><td>Availability impact</td></tr>
+<tr><td>Network</td><td>Low</td><td>None</td><td>None</td><td>None</td><td>Partial</td></tr></table>
+<p>CVSS Base score: 5</p><p>CVSS Vector: (AV:N/AC:L/Au:N/C:N/I:N/A:P)</p>
+<p>CVSS Temporal score: 3.7</p><p>CVSS Vector: (AV:N/AC:L/Au:N/C:N/I:N/A:P/E:U/RL:OF/RC:C)</p>
+<p>CVSS Environmental score: 2.8</p><p>CVSS Vector: (AV:N/AC:L/Au:N/C:N/I:N/A:P/E:U/RL:OF/RC:C/CDP:N/TD:M/CR:ND/IR:ND/AR:ND)</p>
+<table><tr><td><h2 class="product">Stormshield Endpoint Security</h2></td><td>CVSS v2 Overall Score: 4.3</td></tr></table>
+<table><tr><td><h2>Analysis</h2></td><td><h2>Impacted version</h2></td></tr>
+<tr><td><p>The successful exploitation of this vulnerability could allow an attacker to cause a denial of service on the Apache server bundled with the Stormshield Endpoint Security server.</p><p>The temporary unavailability of the framework.exe process running on an agent has no security impact: the security policy is still applied even if the framework.exe process is unavailable.</p></td><td><ul><li>SES 6.0.15 and 7.1.02</li></ul></td></tr>
+<tr><td><h2>Workaround solution</h2></td><td><h2>Solution</h2></td></tr>
+<tr><td><p>There is no workaround solution.</p></td><td><p>The 6.0.17 and 7.1.04 updates are correcting this vulnerability.</p></td></tr></table>
+<table><tr><td>Access vector</td><td>Access complexity</td><td>Authentication</td><td>Confidentiality impact</td><td>Integrity impact</td><td>Availability impact</td></tr>
+<tr><td>Network</td><td>Low</td><td>None</td><td>None</td><td>None</td><td>Partial</td></tr></table>
+<p>CVSS Base score: 5</p><p>CVSS Vector: (AV:N/AC:L/Au:N/C:N/I:N/A:P)</p>
+<p>CVSS Temporal score: 3.7</p><p>CVSS Vector: (AV:N/AC:L/Au:N/C:N/I:N/A:P/E:U/RL:OF/RC:C)</p>
+<p>CVSS Environmental score: 4.3</p><p>CVSS Vector: (AV:N/AC:L/Au:N/C:N/I:N/A:P/E:U/RL:OF/RC:C/CDP:N/TD:M/CR:ND/IR:ND/AR:ND)</p>
+<table><tr><td><h2 class="product">Fast360</h2></td><td>CVSS v2 Overall Score: 4.5</td></tr></table>
+<table><tr><td><h2>Analysis</h2></td><td><h2>Impacted version</h2></td></tr>
+<tr><td><p>To cause a denial of service, an attacker must exploit the vulnerability on one of the following components:</p><p>The denial of service makes the appliance rebooting for versions equal or later than 5.0/29 and 6.0/1</p><p>For prior versions, the denial of service results in some services being randomly killed.</p></td><td><ul><li>Fast360 5.0/16 to 5.0/32</li><li>Fast360 6.0/1 to 6.0/6</li></ul></td></tr>
+<tr><td><h2>Workaround solution</h2></td><td><h2>Solution</h2></td></tr>
+<tr><td><p>To limit the scope of the attack, check that ‘Admin from’ network and filtering rules using Akauth are set to be as restrictive as possible.</p></td><td><p>A new version of the product will provide the security patches needed.</p></td></tr></table>
+<table><tr><td>Access vector</td><td>Access complexity</td><td>Authentication</td><td>Confidentiality impact</td><td>Integrity impact</td><td>Availability impact</td></tr>
+<tr><td>Adjacent Network</td><td>Low</td><td>None</td><td>None</td><td>None</td><td>Partial</td></tr></table>
+<p>CVSS Base score: 6.1</p><p>CVSS Vector: (AV:A/AC:L/Au:N/C:N/I:N/A:C)</p>
+<p>CVSS Temporal score: 3.7</p><p>CVSS Vector: (AV:A/AC:L/Au:N/C:N/I:N/A:C/E:U/RL:OF/RC:C)</p>
+<p>CVSS Environmental score: 4.5</p><p>CVSS Vector: (AV:A/AC:L/Au:N/C:N/I:N/A:C/E:U/RL:OF/RC:C/CDP:N/TD:M/CR:ND/IR:ND/AR:ND)</p>
+<table><tr><td><h2 class="product">Netasq</h2></td><td>CVSS v2 Overall Score: 3.7</td></tr></table>
+<table><tr><td><h2>Analysis</h2></td><td><h2>Impacted version</h2></td></tr>
+<tr><td><p>The vulnerability can be exploited on the SSL proxy and administration and authentication portal components.</p></td><td><ul><li>Netasq 9.0.0 to 9.1.3</li></ul></td></tr>
+<tr><td><h2>Workaround solution</h2></td><td><h2>Solution</h2></td></tr>
+<tr><td><p>Disable the implicit filtering rules on authentication, webadmin and SSL VPN, then replace them with more restrictive rules on sources of connections.</p></td><td><p>A new version of the product will provide the security patches needed.</p></td></tr></table>
+<table><tr><td>Access vector</td><td>Access complexity</td><td>Authentication</td><td>Confidentiality impact</td><td>Integrity impact</td><td>Availability impact</td></tr>
+<tr><td>Network</td><td>Low</td><td>None</td><td>None</td><td>None</td><td>Partial</td></tr></table>
+<p>CVSS Base score: 5</p><p>CVSS Vector: (AV:N/AC:L/Au:N/C:N/I:N/A:P)</p>
+<p>CVSS Temporal score: 3.7</p><p>CVSS Vector: (AV:N/AC:L/Au:N/C:N/I:N/A:P/E:U/RL:OF/RC:C)</p>
+<p>CVSS Environmental score: 3.7</p><p>CVSS Vector: (AV:N/AC:L/Au:N/C:N/I:N/A:P/E:U/RL:OF/RC:C/CDP:N/TD:M/CR:ND/IR:ND/AR:ND)</p>
+</div></article></body></html>

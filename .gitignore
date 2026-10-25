@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# advisory_cpe_generator
+config.json
+download/
+output/
+cpe_review.csv
+*.log

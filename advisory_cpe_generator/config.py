@@ -1,0 +1,142 @@
+# Copyright 2026 ellipse2v
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+config.json loading.
+
+Every key has a default, so config.json only needs the values you change.
+A global "proxy" block applies to every connector; a connector's own "proxy"
+block overrides it key by key. Secrets are never read from config.json:
+connectors name the environment variables that hold them.
+"""
+
+import copy
+import json
+from pathlib import Path
+
+DEFAULTS = {
+    # Phase 1 saves the vendors' files as published in <download_dir>/<vendor>/,
+    # phase 2 writes the CSAF documents with CPEs in <output_dir>/<vendor>/.
+    "download_dir": "download",
+    "output_dir": "output",
+    "publisher": {
+        # CSAF publisher of the generated documents. "translator" is the CSAF
+        # category for a party that converts advisories it did not author.
+        "category": "translator",
+        "name": "advisory_cpe_generator",
+        "namespace": "https://github.com/ellipse2v/advisory_cpe_generator",
+    },
+    "tlp": "WHITE",
+    "proxy": {"http": "", "https": "", "no_proxy": ""},
+    "http": {"timeout": 30, "retries": 3, "user_agent": "advisory_cpe_generator/0.1"},
+    "logging": {"level": "INFO", "file": ""},
+    "cpe": {
+        # Manual table: vendor,product,cpe_part,cpe_vendor,cpe_product
+        "mapping_csv": "cpe_mapping.csv",
+        # cpeMiniLLMLevenshtein checkout: its NVD cache (cpe_data.json.gz) and
+        # cpe_aliases.csv are used for exact lookups, its matcher for the rest.
+        "matcher_path": "../cpeMiniLLMLevenshtein",
+        # Reuse a CPE the vendor gave for another version of the same product.
+        "use_examples": True,
+        "use_dictionary": True,
+        # Skipped with a warning when sentence-transformers/torch are not installed.
+        "use_semantic_matcher": True,
+        "min_score": 0.65,
+        # A version range gets the product's CPE with version '*' (next to its vers expression).
+        "range_cpe": True,
+        # Expand a version range into the versions the NVD dictionary lists.
+        "expand_ranges": True,
+        "review_csv": "cpe_review.csv",
+    },
+    "connectors": {
+        "stormshield": {
+            "enabled": True,
+            "base_url": "https://advisories.stormshield.eu",
+            "delay": 1.0,
+        },
+        "cisco": {
+            "enabled": False,
+            "token_url": "https://id.cisco.com/oauth2/default/v1/token",
+            "api_url": "https://apix.cisco.com/security/advisories/v2",
+            "client_id_env": "CISCO_CLIENT_ID",
+            "client_secret_env": "CISCO_CLIENT_SECRET",
+            "rate_limit": {"per_second": 5, "per_minute": 30, "per_day": 5000},
+        },
+        "paloalto": {
+            "enabled": True,
+            "list_url": "https://security.paloaltonetworks.com/json",
+            "detail_url": "https://security.paloaltonetworks.com/json/{id}",
+            "delay": 0.5,
+        },
+        "oracle": {
+            "enabled": True,
+            "alerts_url": "https://www.oracle.com/security-alerts/",
+            "delay": 1.0,
+        },
+        "fortinet": {
+            "enabled": True,
+            "rss_url": "https://filestore.fortinet.com/fortiguard/rss/ir.xml",
+            # --history: every page of the PSIRT list instead of the RSS feed.
+            "list_page_url": "https://www.fortiguard.com/psirt?page={page}",
+            "max_pages": 500,
+            "csaf_url": "https://www.fortiguard.com/psirt/{id}/csaf",
+            "page_url": "https://www.fortiguard.com/psirt/{id}",
+            "cvrf_url": "https://www.fortiguard.com/psirt/cvrf/{id}",
+            # Each advisory is downloaded in the first of these formats it has.
+            "formats": ["csaf", "html", "cvrf"],
+            # FortiGuard answers a browser User-Agent.
+            "http": {"user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+            "delay": 1.0,
+        },
+    },
+}
+
+
+def _merge(base, override):
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            _merge(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
+def load_config(path=None):
+    """Defaults merged with config.json (if given); relative paths stay relative to it."""
+    config = copy.deepcopy(DEFAULTS)
+    base_dir = Path.cwd()
+    if path:
+        path = Path(path)
+        with open(path, encoding="utf-8") as fh:
+            _merge(config, json.load(fh))
+        base_dir = path.resolve().parent
+    config["_base_dir"] = str(base_dir)
+    return config
+
+
+def resolve_path(config, value):
+    """Path from config.json, relative to the config file's directory."""
+    if not value:
+        return None
+    p = Path(value).expanduser()
+    return p if p.is_absolute() else Path(config["_base_dir"]) / p
+
+
+def connector_config(config, name):
+    """A connector's block with the global proxy/http settings folded in."""
+    conn = copy.deepcopy(config["connectors"].get(name, {}))
+    proxy = dict(config.get("proxy", {}))
+    proxy.update({k: v for k, v in conn.get("proxy", {}).items() if v is not None})
+    conn["proxy"] = proxy
+    conn["http"] = _merge(copy.deepcopy(config.get("http", {})), conn.get("http", {}))
+    return conn

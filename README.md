@@ -1,2 +1,247 @@
 # advisory_cpe_generator
-add cpe to cvrf or csaf
+
+Generates one **CSAF 2.0** document per vendor and CVE (`stormshield_cve_2025_11955.json`,
+`paloalto_cve_2024_0012.json`, `cisco_cve_2018_0171.json`) from the vendors' security
+advisories, with a **CPE 2.3** identifier on every product version that can be identified.
+
+Only standard CSAF 2.0 fields are written; nothing is invented. A CPE either comes from
+the vendor's data (for that version or, version replaced, for another version of the same
+product), from a mapping you maintain, from the NVD CPE dictionary or from the
+cpeMiniLLMLevenshtein matcher. When none of these identifies the product, the product is
+written without a CPE and listed in `cpe_review.csv`.
+
+A run has two phases, over every vendor:
+
+1. **download**: the vendors' advisories are saved as published (HTML, CSAF, CVE JSON,
+   CVRF) in `download/<vendor>/`. Only this phase uses the network.
+2. **enrich**: the downloaded files are parsed, CPEs are added and one CSAF document per
+   CVE is written in `output/<vendor>/`.
+
+| Vendor | Source | CPE in the source |
+|---|---|---|
+| Stormshield | https://advisories.stormshield.eu (HTML pages) | No |
+| Cisco | openVuln API, then each advisory's CSAF document | Sometimes (`product_identification_helper`) |
+| Palo Alto Networks | https://security.paloaltonetworks.com/api (`/json`, `/json/{ID}`): CVE JSON 5 records | Yes on recent records (`cpes`) |
+| Oracle | Critical Patch Update CSAF, one per quarter (linked from each `cpu<mon><year>.html`), split per CVE | Yes |
+| Fortinet | FortiGuard PSIRT RSS feed (or, with `--history`, every page of the PSIRT list), then each advisory's CSAF document (`/psirt/{id}/csaf`), else its HTML page, else its CVRF 1.2 document | CSAF: depends on the document; HTML, CVRF: no |
+
+## Installation
+
+```bash
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+git clone https://github.com/ellipse2v/cpeMiniLLMLevenshtein ../cpeMiniLLMLevenshtein   # NVD dictionary
+pip install sentence-transformers torch    # LLM matcher (optional: skipped with a warning without it)
+cp config.example.json config.json
+```
+
+cpeMiniLLMLevenshtein is found through `cpe.matcher_path` in config.json
+(default `../cpeMiniLLMLevenshtein`, relative to config.json). Without it, the dictionary and
+LLM steps are skipped with a warning.
+
+## Usage
+
+```bash
+python -m advisory_cpe_generator --config config.json                      # enabled connectors, both phases
+python -m advisory_cpe_generator --config config.json --step download      # phase 1 only
+python -m advisory_cpe_generator --config config.json --step enrich        # phase 2 only, no network, every CVE
+python -m advisory_cpe_generator --config config.json --vendor paloalto --since 7
+python -m advisory_cpe_generator --config config.json --vendor stormshield --max 5
+python -m advisory_cpe_generator --config config.json --step download --history  # Fortinet: whole history
+python -m advisory_cpe_generator --config config.json --vendor cisco --file downloaded_csaf/*.json
+```
+
+| Option | Effect |
+|---|---|
+| `--vendor a,b` | only these connectors (default: those `enabled` in config.json) |
+| `--step all\|download\|enrich` | both phases (default), or one |
+| `--since DAYS` | only advisories updated in the last DAYS |
+| `--max N` | at most N advisories per vendor (testing) |
+| `--full` | download every advisory again, even those already downloaded |
+| `--history` | the whole history where the usual list is partial (Fortinet) |
+| `--file PATH...` | local files instead of downloading (one `--vendor`) |
+
+Without `--vendor`, `--since` and `--max`, `--step download` downloads everything each source
+lists (see the vendor notes for how much history each source gives).
+
+A run downloads the advisories that are new or whose date changed (`--full`: all of them),
+then writes the documents of the CVEs they name. `--step enrich` rewrites every CVE from
+`download/`, e.g. after editing `cpe_mapping.csv` (unchanged documents are left as they are).
+
+`--file` copies local files into `download/<vendor>/` instead of downloading: Cisco, Oracle
+or Fortinet CSAF documents, Fortinet HTML pages (`.html`) or CVRF 1.2 files (`.xml`), or
+Palo Alto CVE JSON 5 records. (A Stormshield page given alone lacks the product list, which is on the home page,
+so its CVEs are skipped.)
+
+Cisco needs openVuln API credentials in the environment (never in a file of the repository):
+
+```bash
+export CISCO_CLIENT_ID=... CISCO_CLIENT_SECRET=...
+```
+
+## Output
+
+```
+download/                       # phase 1: as published
+├── stormshield/
+│   ├── 2025-006.html           # one file per advisory (.html, .json or .xml)
+│   ├── _list.html              # the list the advisories were found in
+│   └── manifest.json           # advisory -> url, date, files (and the Stormshield product list)
+├── cisco/ paloalto/ oracle/ fortinet/ ...
+output/                         # phase 2: CSAF with CPEs
+├── stormshield/
+│   ├── stormshield_cve_2025_11955.json
+│   ├── index.txt               # CSAF provider index (section 7.1.13)
+│   └── changes.csv             # CSAF provider change list (section 7.1.14), newest first
+└── cisco/ paloalto/ oracle/ fortinet/ ...
+```
+
+Both directories are set in config.json (`download_dir`, `output_dir`).
+
+- One file per (vendor, CVE). When a vendor publishes several advisories for the same CVE,
+  they are merged into one document; each advisory is a reference.
+- The file name is the CSAF `tracking.id` (CSAF 2.0 section 5.1).
+- A document is rewritten only when its content changes: `tracking.version` is then
+  incremented and a `revision_history` entry added. Unchanged documents keep their dates.
+- Publisher: `category: translator` by default (CSAF's category for a party that converts
+  advisories it did not author); the vendor advisory is in `references`.
+
+### What goes where in the CSAF document
+
+| Data | CSAF field |
+|---|---|
+| Product, version | `product_tree`: vendor → product_name → `product_version` |
+| Version range | `product_version_range` named with a [vers](https://github.com/package-url/vers-spec) expression, e.g. `vers:generic/>=11.2.0\|<11.2.4-h1`, with the product's CPE, version `*` (`cpe:2.3:o:paloaltonetworks:pan-os:*:*:*:*:*:*:*:*`): read the two together, the CPE alone means every version |
+| CPE | `product_identification_helper.cpe` |
+| Affected / fixed / not affected | `vulnerabilities[].product_status` |
+| CVSS v2, v3.0, v3.1 | `vulnerabilities[].scores` (only when the source gives the vector) |
+| CVSS v4 | a note: CSAF 2.0 has no CVSS v4 field |
+| Workaround, fix, mitigation | `vulnerabilities[].remediations` |
+
+## CPE resolution
+
+For every product version, in this order:
+
+1. **CPE from the source** (Palo Alto `cpes`, CSAF `product_identification_helper.cpe`), kept
+   if it is a valid CPE 2.3 string.
+2. **Example from the vendor**: the vendor gave a CPE for another version of the same
+   product, in the same advisory or in another downloaded advisory of the vendor; it is
+   reused with the version replaced (PAN-OS fixed in *11.2.4-h1* →
+   `o:paloaltonetworks:pan-os:11.2.4:h1`, written as Palo Alto does: hotfix in the update
+   field). A product name the vendor published under two CPE products is not used.
+3. **`cpe_mapping.csv`**: `vendor,product,cpe_part,cpe_vendor,cpe_product`, for names the
+   dictionary does not match exactly (e.g. *GlobalProtect App* → `paloaltonetworks:globalprotect`).
+4. **NVD dictionary, exact name**: the product name, with and without the vendor prefix and a
+   trailing "Software", must equal an NVD product of the same vendor, and only one
+   (*Cisco IOS XE Software* → `o:cisco:ios_xe`, *Stormshield Network Security* →
+   `a:stormshield:stormshield_network_security`). Uses cpeMiniLLMLevenshtein's NVD cache and
+   `cpe_aliases.csv` (vendor renames). The dictionary CPE is used when NVD lists the version,
+   otherwise the version is substituted in the product's CPE.
+5. **LLM matcher** (on by default, needs sentence-transformers and torch, otherwise skipped
+   with a warning): cpeMiniLLMLevenshtein's `CPEMatcher`, accepted at `min_score` (0.65) or
+   above; the CPE's version is the product's. A result whose CPE product shares no word with
+   the product name is rejected as another product (*Fast360* → `h:stormshield:sn310`).
+6. Otherwise no CPE, and a line in `cpe_review.csv`.
+
+A version range gets the product's CPE with version `*` (`range_cpe`, on by default), so that
+a consumer such as Dependency-Track can combine CPE and range. The CPE product comes from the
+steps above; when none identifies it (e.g. *Netasq*, not in NVD), it is built from the vendor
+and product names (`cpe:2.3:a:stormshield:netasq:*:...`, with the vendor as in the vendor's
+other CPEs) and the product is listed in `cpe_review.csv`. A product with no version gets no CPE.
+
+With `expand_ranges`, a range of a product identified in the NVD dictionary (and for which
+the source gave no CPE) is expanded into the versions NVD lists in that range, each with its
+own CPE.
+
+Loading the NVD dictionary takes ~25 s and ~850 MB, only when a product needs it; the LLM
+matcher loads its own copy and its model, so count about twice that when both are used.
+Each step can be turned off in config.json (`use_examples`, `use_dictionary`,
+`use_semantic_matcher`, `range_cpe`, `expand_ranges`).
+
+## config.json
+
+Every key is optional (defaults in `advisory_cpe_generator/config.py`, example in
+`config.example.json`). Proxy: the global `proxy` block applies to every connector and a
+connector's own `proxy` block overrides it key by key:
+
+```json
+{
+  "proxy": {"http": "http://proxy.local:3128", "https": "http://proxy.local:3128", "no_proxy": ""},
+  "connectors": {"cisco": {"proxy": {"https": "http://other-proxy:8080"}}}
+}
+```
+
+Relative paths are relative to the directory of config.json. Secrets are never read from
+config.json: the Cisco connector names the environment variables that hold them.
+
+## Tests
+
+```bash
+pytest
+```
+
+The tests run offline on real data: a Stormshield advisory page (2025), two Palo Alto CVE
+records (from CVEProject/cvelistV5), the OASIS Cisco example in CSAF and in CVRF 1.2, and an
+excerpt of Oracle's July 2026 CPU CSAF (3 CVEs). Two pages are rebuilt, the markup being an
+approximation: an old-layout Stormshield page (STORM-2014-003, from its text) and a FortiGuard
+page (FG-IR-24-015, from a summary). The two phases are tested with the network replaced by
+these files. Every generated document is validated against the CSAF 2.0 JSON schema (with the
+FIRST CVSS schemas).
+
+### Vendor notes
+
+How much history a full download gets: Stormshield, all advisories (home page list); Cisco,
+all (openVuln `/all`); Palo Alto, what `/json` lists; Oracle, every CPU on the Security Alerts
+page, but CSAF exists only from 2024, so older CPUs are recorded without a file; Fortinet, the
+latest 50 (RSS feed), or everything with `--history`.
+
+- **Stormshield** and **Cisco**: the listing and download code is copied from
+  [stormshieldParser](https://github.com/ellipse2v/stormshieldParser) and
+  [cisco_csaf_dowloader](https://github.com/ellipse2v/cisco_csaf_dowloader) (OAuth, rate
+  limits), not imported.
+- **Stormshield**: pages from before 2017 have one block per product (versions, analysis,
+  workaround, solution, CVSS v2 metrics); each product gets its own CVSS base score and
+  remediations, and the versions its Solution names as correcting the issue are `fixed`.
+  A solution that only announces a future version is `none_available`. The overall
+  (environmental) score is kept as a note. Tested on a page rebuilt from the text of
+  STORM-2014-003; the original markup was not available.
+- **Oracle**: only the quarterly CPUs have a CSAF document; out-of-band Security Alerts and
+  the Linux/Solaris bulletins are not covered. A CPU document is fetched once; `--full`
+  fetches revised ones again. Oracle's own CPEs are kept as published, including the few
+  where a version range is written in the CPE version field.
+- **Fortinet**: the RSS feed lists the latest advisories only (50); `--history` reads every page
+  of the PSIRT list instead (about 15 advisories per page, until a page brings nothing new),
+  for a first full download. Each advisory is downloaded in the first format it has among
+  `formats` (CSAF, HTML page, CVRF); every advisory page has its CSAF at
+  `https://www.fortiguard.com/psirt/{id}/csaf`, so the HTML and CVRF readers are fallbacks.
+  FortiGuard answers a browser User-Agent: the connector's `http.user_agent` sets one. The
+  HTML page's Version / Affected / Solution table gives the products: *7.4.0 through 7.4.2* is a range, *6.0 all versions* the range of the branch
+  (`>=6.0|<6.1`), *Not affected* a `known_not_affected` branch, *Upgrade to 7.4.3 or above* a
+  `fixed` version and a `vendor_fix`. The Summary's "Workaround:" paragraph is a workaround,
+  the Virtual Patch section (IPS signature) a mitigation. CVRF files are read with a generic
+  CVRF 1.2 reader (`cvrf_reader.py`), which also reads other vendors' CVRF.
+
+## Not verified yet
+
+These parts were written from the documentation without access to the live service:
+
+- Palo Alto `/json` list: its field names. The parser accepts the usual ones (`ID`, `id`,
+  `cveId`, `updated`, ...). `PAN-SA-*` bulletins that are not CVE records are skipped.
+- Cisco openVuln: advisories are expected to carry a `csafUrl`.
+- Stormshield: page layouts other than the two tested (2025 and 2014, the latter rebuilt).
+- Fortinet: the RSS feed, the PSIRT list pages, the `/psirt/{id}/csaf` documents, the HTML
+  pages and CVRF files (their structure was read through a summarising web fetch; the HTML
+  parser is tested on a rebuilt page, the CVRF reader on the OASIS CVRF 1.2 example).
+
+Verified live: Oracle, both phases (the October 2026 CPU is saved in `download/oracle/` and
+gives 1,739 documents, all valid against the CSAF schema, every product with Oracle's CPE;
+a second run leaves them unchanged).
+
+## License
+
+Apache License 2.0. `tests/schemas/cvss-v*.json`: Copyright (c) FIRST.ORG, Inc. (BSD-style
+license in each file). `tests/schemas/csaf_json_schema.json` and
+`tests/fixtures/cisco-sa-20180328-smi2.json` and `cisco-sa-20180328-smi2_cvrf.xml`: OASIS CSAF TC.
+`tests/fixtures/oracle_cpujul2026_excerpt.json`: excerpt of Oracle's published CSAF.
+`tests/fixtures/stormshield_*.html` and `fortinet_*_reconstructed.html`: text from the
+vendors' published advisories, for tests.
