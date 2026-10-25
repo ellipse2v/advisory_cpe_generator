@@ -40,7 +40,7 @@ class OracleAdapter(Adapter):
     vendor = "oracle"
     vendor_name = "Oracle"
 
-    def list_advisories(self, since=None):
+    def list_advisories(self, since=None, history=False):
         page = self.cfg["alerts_url"]
         html = self.http.get(page).text
         self.listing = {"_list.html": html.encode("utf-8")}

@@ -29,6 +29,8 @@ def _vulns(config):
         FIXTURES / "stormshield_2025-006.html", {"products": ["Stormshield Network VPN Client"]})[1][0]
     yield StormshieldAdapter(connector_config(config, "stormshield")).parse_file(
         FIXTURES / "stormshield_2014-003_reconstructed.html")[1][0]
+    yield FortinetAdapter(connector_config(config, "fortinet")).parse_file(
+        FIXTURES / "fortinet_FG-IR-24-015_reconstructed.html")[1][0]
     for name in ("pan_cve_2024_0012.json", "pan_cve_2024_3400.json"):
         yield PaloAltoAdapter(connector_config(config, "paloalto")).parse_file(FIXTURES / name)[1][0]
     yield CiscoAdapter(connector_config(config, "cisco")).parse_file(

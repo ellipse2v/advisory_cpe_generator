@@ -44,8 +44,12 @@ class Adapter:
         # {file name: bytes} of the list read by list_advisories(), saved with the downloads.
         self.listing = {}
 
-    def list_advisories(self, since=None):
-        """[AdvisoryRef], newest data the source offers; `since` is a datetime or None."""
+    def list_advisories(self, since=None, history=False):
+        """
+        [AdvisoryRef], newest data the source offers; `since` is a datetime or None.
+        history: also list what the usual list leaves out (Fortinet: the RSS feed
+        has the latest advisories only, the PSIRT pages have them all).
+        """
         raise NotImplementedError
 
     def download(self, ref):

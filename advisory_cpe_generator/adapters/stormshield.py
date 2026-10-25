@@ -207,7 +207,7 @@ class StormshieldAdapter(Adapter):
     vendor = "stormshield"
     vendor_name = "Stormshield"
 
-    def list_advisories(self, since=None):
+    def list_advisories(self, since=None, history=False):
         base_url = self.cfg["base_url"]
         home = self.http.get(base_url).content
         self.listing = {"_list.html": home}

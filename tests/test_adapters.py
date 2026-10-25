@@ -17,7 +17,7 @@ from advisory_cpe_generator.adapters import (CiscoAdapter, FortinetAdapter, Orac
                                              StormshieldAdapter)
 from advisory_cpe_generator.adapters.stormshield import parse_versions
 from advisory_cpe_generator.config import connector_config
-from advisory_cpe_generator.model import FIXED, KNOWN_AFFECTED, KNOWN_NOT_AFFECTED
+from advisory_cpe_generator.model import FIXED, KNOWN_AFFECTED, KNOWN_NOT_AFFECTED, Score
 
 from conftest import FIXTURES
 
@@ -203,7 +203,7 @@ RSS = """<?xml version="1.0" encoding="UTF-8"?>
 </channel></rss>"""
 
 
-def test_fortinet_rss_prefers_csaf_then_cvrf(config, tmp_path):
+def test_fortinet_rss_prefers_csaf_then_html_then_cvrf(config, tmp_path):
     http = FakeHttp({
         "https://filestore.fortinet.com/fortiguard/rss/ir.xml": RSS,
         "https://filestore.fortinet.com/fortiguard/psirt/csaf_example_fg-ir-26-186.json":
@@ -212,12 +212,58 @@ def test_fortinet_rss_prefers_csaf_then_cvrf(config, tmp_path):
             (FIXTURES / "cisco-sa-20180328-smi2_cvrf.xml").read_bytes()})
     adapter = FortinetAdapter(connector_config(config, "fortinet"), http=http)
     a, b = adapter.list_advisories()
-    assert (a.id, a.details["format"], a.updated) == ("FG-IR-26-186", "csaf", "2026-10-21")
-    assert (b.id, b.details["format"]) == ("FG-IR-20-005", "cvrf")
+    assert (a.id, a.updated) == ("FG-IR-26-186", "2026-10-21")
+    assert set(a.details["urls"]) == {"csaf", "html", "cvrf"} and set(b.details["urls"]) == {"html", "cvrf"}
     assert list(adapter.download(a)) == ["FG-IR-26-186.json"]
-    assert list(adapter.download(b)) == ["FG-IR-20-005.xml"]
+    # b: no CSAF, its HTML page cannot be fetched (not served here): CVRF
+    assert list(adapter.download(b)) == ["FG-IR-20-005.xml"] and b.details["format"] == "cvrf"
+    http.pages["https://fortiguard.fortinet.com/psirt/FG-IR-20-005"] = FORTI_PAGE.read_bytes()
+    assert list(adapter.download(b)) == ["FG-IR-20-005.html"]
     assert fetch(adapter, a, tmp_path)[0].vendor == fetch(adapter, b, tmp_path)[0].vendor == "fortinet"
 
+
+FORTI_PAGE = FIXTURES / "fortinet_FG-IR-24-015_reconstructed.html"
+
+
+def test_fortinet_html_page(config):
+    adapter = FortinetAdapter(connector_config(config, "fortinet"))
+    adv_id, [v] = adapter.parse_file(FORTI_PAGE)
+    assert (adv_id, v.cve, v.title) == ("FG-IR-24-015", "CVE-2024-21762", "Out-of-bound Write in sslvpnd")
+    assert v.release_date == "2024-02-08T00:00:00Z"
+    assert v.scores == [Score("3.1", "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H", 9.8)]
+    rows = {(p.name, p.label(), p.status) for p in v.products}
+    assert ("FortiOS", "vers:generic/>=7.4.0|<=7.4.2", KNOWN_AFFECTED) in rows
+    assert ("FortiOS", "7.4.3", FIXED) in rows
+    assert ("FortiOS", "vers:generic/>=7.6|<7.7", KNOWN_NOT_AFFECTED) in rows       # "Not affected"
+    assert ("FortiProxy", "vers:generic/>=1.2|<1.3", KNOWN_AFFECTED) in rows       # "1.2 all versions"
+    assert not any(p.status == FIXED and p.name == "FortiProxy" and p.version.startswith("1.") for p in v.products
+                   if p.version)                                                    # "Migrate to a fixed release"
+    assert len(v.products) == 24
+    rem = {r.category: r for r in v.remediations}
+    assert rem["workaround"].details.startswith("disable SSL VPN")
+    assert "HTTP.Chunk.Length.Invalid" in rem["mitigation"].details
+    fix = next(r for r in v.remediations if r.details == "Upgrade to 7.4.3 or above")
+    assert len(fix.product_keys) == 2                                              # FortiOS 7.4 and FortiProxy 7.4 rows
+    assert v.notes[0].text.startswith("A out-of-bounds write")
+
+
+def test_fortinet_affected_cell():
+    from advisory_cpe_generator.adapters.fortinet import parse_affected
+    assert parse_affected("7.2.5, 7.2.6", "7.2") == [(KNOWN_AFFECTED, "7.2.5"), (KNOWN_AFFECTED, "7.2.6")]
+    [(_, r)] = parse_affected("7.0 all versions", "7.0")
+    assert r.vers() == "vers:generic/>=7.0|<7.1"
+
+
+def test_fortinet_history_pages(config):
+    pages = {f"https://www.fortiguard.com/psirt?page={n}": body for n, body in (
+        (1, "<a>FG-IR-26-182 Double free</a> <a>FG-IR-26-181 x</a>"),
+        (2, "<a>FG-IR-26-181 x</a> <a>FG-IR-25-010 y</a>"),
+        (3, "<a>FG-IR-25-010 y</a>"))}   # nothing new: the end
+    adapter = FortinetAdapter(connector_config(config, "fortinet"), http=FakeHttp(pages))
+    refs = adapter.list_advisories(history=True)
+    assert [r.id for r in refs] == ["FG-IR-26-182", "FG-IR-26-181", "FG-IR-25-010"]
+    assert refs[0].details["urls"] == {"html": "https://www.fortiguard.com/psirt/FG-IR-26-182",
+                                       "cvrf": "https://www.fortiguard.com/psirt/cvrf/FG-IR-26-182"}
 
 OLD_PAGE = FIXTURES / "stormshield_2014-003_reconstructed.html"
 

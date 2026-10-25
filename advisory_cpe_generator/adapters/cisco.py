@@ -66,7 +66,7 @@ class CiscoAdapter(Adapter):
                 return self.http.get_json(url, headers=headers)
             raise
 
-    def list_advisories(self, since=None):
+    def list_advisories(self, since=None, history=False):
         base = self.cfg["api_url"].rstrip("/")
         if since:
             url = (f"{base}/all/lastpublished?startDate={since:%Y-%m-%d}"

@@ -86,6 +86,13 @@ DEFAULTS = {
         "fortinet": {
             "enabled": True,
             "rss_url": "https://filestore.fortinet.com/fortiguard/rss/ir.xml",
+            # --history: every page of the PSIRT list instead of the RSS feed.
+            "list_page_url": "https://www.fortiguard.com/psirt?page={page}",
+            "max_pages": 500,
+            "page_url": "https://www.fortiguard.com/psirt/{id}",
+            "cvrf_url": "https://www.fortiguard.com/psirt/cvrf/{id}",
+            # Each advisory is downloaded in the first of these formats it has.
+            "formats": ["csaf", "html", "cvrf"],
             "delay": 1.0,
         },
     },

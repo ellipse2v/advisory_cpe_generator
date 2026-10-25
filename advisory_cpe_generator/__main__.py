@@ -36,6 +36,9 @@ def main(argv=None):
     parser.add_argument("--since", type=int, metavar="DAYS", help="only advisories updated in the last DAYS")
     parser.add_argument("--max", type=int, help="download at most N advisories per vendor (testing)")
     parser.add_argument("--full", action="store_true", help="download every advisory again")
+    parser.add_argument("--history", action="store_true",
+                        help="list the whole history where the usual list is partial (Fortinet: PSIRT pages "
+                             "instead of the RSS feed of the latest advisories)")
     parser.add_argument("--file", nargs="+", metavar="PATH",
                         help="use local files instead of downloading (one --vendor required)")
     args = parser.parse_args(argv)
@@ -54,7 +57,7 @@ def main(argv=None):
     if args.file and (not vendors or len(vendors) != 1):
         parser.error("--file needs exactly one --vendor")
 
-    summary = run(config, vendors, args.since, args.full, args.step, args.max, args.file)
+    summary = run(config, vendors, args.since, args.full, args.step, args.max, args.file, args.history)
     for vendor, counts in summary.items():
         print(f"{vendor}: {counts['downloaded']} advisories downloaded; documents: {counts['new']} new, "
               f"{counts['updated']} updated, {counts['unchanged']} unchanged, {counts['skipped']} skipped (no product)")

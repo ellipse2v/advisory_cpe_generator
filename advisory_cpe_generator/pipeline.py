@@ -44,10 +44,10 @@ def _document_counts():
     return {"new": 0, "updated": 0, "unchanged": 0, "skipped": 0}
 
 
-def download(adapter, downloads, since=None, full=False, max_advisories=None):
+def download(adapter, downloads, since=None, full=False, max_advisories=None, history=False):
     """Phase 1 for one vendor: save advisories not downloaded yet (or updated). Returns their ids."""
     known = downloads.manifest(adapter.vendor)
-    refs = adapter.list_advisories(since=since)
+    refs = adapter.list_advisories(since=since, history=history)
     for name, data in adapter.listing.items():
         downloads.save_file(adapter.vendor, name, data)
     todo = [r for r in refs if full or r.id not in known
@@ -127,7 +127,8 @@ def enrich(adapter, downloads, storage, enricher, config, advisory_ids=None):
     return counts
 
 
-def run(config, vendors=None, since_days=None, full=False, step="all", max_advisories=None, files=None):
+def run(config, vendors=None, since_days=None, full=False, step="all", max_advisories=None, files=None,
+        history=False):
     downloads = Downloads(resolve_path(config, config["download_dir"]))
     storage = Storage(resolve_path(config, config["output_dir"]))
     since = datetime.now() - timedelta(days=since_days) if since_days else None
@@ -141,7 +142,7 @@ def run(config, vendors=None, since_days=None, full=False, step="all", max_advis
         for name, adapter in adapters.items():
             try:
                 got[name] = (import_files(adapter, downloads, files) if files
-                             else download(adapter, downloads, since, full, max_advisories))
+                             else download(adapter, downloads, since, full, max_advisories, history))
             except Exception as e:   # listing failed: the other vendors go on
                 log.error("%s: download failed: %s", name, e)
                 got[name] = set()

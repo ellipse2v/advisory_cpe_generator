@@ -23,7 +23,7 @@ A run has two phases, over every vendor:
 | Cisco | openVuln API, then each advisory's CSAF document | Sometimes (`product_identification_helper`) |
 | Palo Alto Networks | https://security.paloaltonetworks.com/api (`/json`, `/json/{ID}`): CVE JSON 5 records | Yes on recent records (`cpes`) |
 | Oracle | Critical Patch Update CSAF, one per quarter (linked from each `cpu<mon><year>.html`), split per CVE | Yes |
-| Fortinet | FortiGuard PSIRT RSS feed, then each advisory's CSAF document, or its CVRF 1.2 document when it has no CSAF | CSAF: depends on the document; CVRF: no |
+| Fortinet | FortiGuard PSIRT RSS feed (or, with `--history`, every page of the PSIRT list), then each advisory's CSAF document, else its HTML page, else its CVRF 1.2 document | CSAF: depends on the document; HTML, CVRF: no |
 
 ## Installation
 
@@ -43,6 +43,7 @@ python -m advisory_cpe_generator --config config.json --step download      # pha
 python -m advisory_cpe_generator --config config.json --step enrich        # phase 2 only, no network, every CVE
 python -m advisory_cpe_generator --config config.json --vendor paloalto --since 7
 python -m advisory_cpe_generator --config config.json --vendor stormshield --max 5
+python -m advisory_cpe_generator --config config.json --step download --history  # Fortinet: whole history
 python -m advisory_cpe_generator --config config.json --vendor cisco --file downloaded_csaf/*.json
 ```
 
@@ -179,9 +180,15 @@ validated against the CSAF 2.0 JSON schema (with the FIRST CVSS schemas).
   the Linux/Solaris bulletins are not covered. A CPU document is fetched once; `--full`
   fetches revised ones again. Oracle's own CPEs are kept as published, including the few
   where a version range is written in the CPE version field.
-- **Fortinet**: the RSS feed lists the latest advisories only (50), so the first run covers
-  those and later runs keep up. CVRF files are read with a generic CVRF 1.2 reader
-  (`cvrf_reader.py`), which also reads other vendors' CVRF.
+- **Fortinet**: the RSS feed lists the latest advisories only (50); `--history` reads every page
+  of the PSIRT list instead (about 15 advisories per page, until a page brings nothing new),
+  for a first full download. Each advisory is downloaded in the first format it has among
+  `formats` (CSAF, HTML page, CVRF). The HTML page's Version / Affected / Solution table gives
+  the products: *7.4.0 through 7.4.2* is a range, *6.0 all versions* the range of the branch
+  (`>=6.0|<6.1`), *Not affected* a `known_not_affected` branch, *Upgrade to 7.4.3 or above* a
+  `fixed` version and a `vendor_fix`. The Summary's "Workaround:" paragraph is a workaround,
+  the Virtual Patch section (IPS signature) a mitigation. CVRF files are read with a generic
+  CVRF 1.2 reader (`cvrf_reader.py`), which also reads other vendors' CVRF.
 
 ## Not verified yet
 
@@ -191,8 +198,9 @@ These parts were written from the documentation without access to the live servi
   `cveId`, `updated`, ...). `PAN-SA-*` bulletins that are not CVE records are skipped.
 - Cisco openVuln: advisories are expected to carry a `csafUrl`.
 - Stormshield: the page layout of other advisories than the one in `tests/fixtures`.
-- Fortinet: the RSS feed, CSAF and CVRF files (the structure was read through a summarising
-  web fetch, not downloaded). The CVRF reader is tested on the OASIS CVRF 1.2 example.
+- Fortinet: the RSS feed, the PSIRT list pages, the HTML pages, CSAF and CVRF files (the
+  structure was read through a summarising web fetch, not downloaded; the HTML parser is
+  tested on a page rebuilt from the summary of FG-IR-24-015). The CVRF reader is tested on the OASIS CVRF 1.2 example.
 
 Verified live: Oracle, both phases (the October 2026 CPU is saved in `download/oracle/` and
 gives 1,739 documents, all valid against the CSAF schema, every product with Oracle's CPE;

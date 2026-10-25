@@ -58,7 +58,7 @@ class PaloAltoAdapter(Adapter):
     vendor = "paloalto"
     vendor_name = "Palo Alto Networks"
 
-    def list_advisories(self, since=None):
+    def list_advisories(self, since=None, history=False):
         raw = self.http.get(self.cfg["list_url"]).content
         self.listing = {"_list.json": raw}
         data = json.loads(raw)
