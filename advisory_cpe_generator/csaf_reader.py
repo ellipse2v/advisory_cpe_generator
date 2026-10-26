@@ -20,8 +20,14 @@ product_family) branch, and the deepest version-like branch as the version.
 CPE/PURL from product_identification_helper are kept as the source's.
 """
 
+import logging
+import re
+
 from .model import (FIXED, KNOWN_AFFECTED, KNOWN_NOT_AFFECTED, UNDER_INVESTIGATION, Note,
                     Product, Reference, Remediation, Score, Vulnerability)
+from .versions import VersionRange, next_branch
+
+log = logging.getLogger(__name__)
 
 _STATUS = {
     "known_affected": KNOWN_AFFECTED, "first_affected": KNOWN_AFFECTED, "last_affected": KNOWN_AFFECTED,
@@ -35,13 +41,22 @@ _VERSION_CATEGORIES = ("product_version", "service_pack", "patch_level", "produc
 def _version_text(branch_name, product_name):
     """
     Version branches sometimes repeat the product name (Oracle: "Oracle APEX
-    Version 24.1", "X(X_Component) Version 11.4.0"): keep what follows.
+    Version 24.1", "X(X_Component) Version 11.4.0"; Fortinet: "FortiSIEM/7.5.0",
+    "FortiSIEM/ 7.6 all versions"): keep what follows.
     """
     if " Version " in branch_name:
         return branch_name.rsplit(" Version ", 1)[1].strip()
-    if product_name and branch_name.startswith(product_name + " "):
-        return branch_name[len(product_name):].strip()
+    if product_name:
+        m = re.match(rf"^{re.escape(product_name)}\s*[/ ]\s*(\S.*)$", branch_name, re.I)
+        if m:
+            return m.group(1).strip()
     return branch_name
+
+
+def _branch_range(text):
+    """'7.6 all versions' (Fortinet) -> the range of the 7.6 branch; None otherwise."""
+    m = re.match(r"^(\d+(?:\.\d+)*)\s+all versions$", text.strip(), re.I)
+    return VersionRange(introduced=m.group(1), fixed=next_branch(m.group(1))) if m else None
 
 
 def _product(full, path, default_vendor):
@@ -56,7 +71,9 @@ def _product(full, path, default_vendor):
         category, value = version_branch
         value = _version_text(value, name)
         if category == "product_version_range":
-            p.raw_range = value
+            p.version_range = _branch_range(value)
+            if not p.version_range:
+                p.raw_range = value
         else:
             p.version = value
     return p
@@ -107,6 +124,9 @@ def parse_csaf(doc, vendor, vendor_name):
             if not target:
                 continue   # "recommended" is advice, not a status of exposure
             for pid in pids:
+                if pid not in catalog:
+                    # e.g. Fortinet's FG-IR-26-180: known_not_affected "FortiSIEM-7.5.1", not in the tree
+                    log.warning("%s %s: product %r is not in the product tree: ignored", advisory_id, cve, pid)
                 if pid in catalog:
                     p = Product(**{**catalog[pid].__dict__, "status": target})
                     by_pid.setdefault(pid, p)

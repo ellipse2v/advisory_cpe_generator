@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import json
 import re
 
 from advisory_cpe_generator.adapters import (CiscoAdapter, FortinetAdapter, OracleAdapter, PaloAltoAdapter,
@@ -316,3 +317,40 @@ def test_fortinet_browser_user_agent(config):
     from advisory_cpe_generator.http import HttpClient
     assert HttpClient(connector_config(config, "fortinet")).session.headers["User-Agent"].startswith("Mozilla/5.0")
     assert HttpClient(connector_config(config, "oracle")).session.headers["User-Agent"].startswith("advisory_cpe")
+
+
+# Shape of Fortinet's published CSAF for FG-IR-26-180 (as reported): the product is
+# repeated in the version branch, and a status names a product id absent from the tree.
+FORTI_CSAF = {
+    "document": {"title": "FortiSIEM - CRITICAL - FG-IR-26-180", "tracking": {"id": "FG-IR-26-180"}},
+    "product_tree": {"branches": [{"category": "vendor", "name": "Fortinet PSIRT", "branches": [
+        {"category": "product_name", "name": "FortiSIEM", "branches": [
+            {"category": "product_version", "name": "FortiSIEM/7.5.0",
+             "product": {"name": "FortiSIEM 7.5.0", "product_id": "FortiSIEM 7.5.0"}},
+            {"category": "product_version_range", "name": "FortiSIEM/ 7.6 all versions",
+             "product": {"name": "FortiSIEM 7.6", "product_id": "FortiSIEM 7.6"}}]}]}]},
+    "vulnerabilities": [{"cve": "CVE-2026-106173", "product_status": {
+        "known_affected": ["FortiSIEM 7.5.0"],
+        "known_not_affected": ["FortiSIEM 7.6", "FortiSIEM-7.5.1"]}}],
+}
+
+
+def test_fortinet_csaf_product_prefix_in_version(config, tmp_path):
+    path = tmp_path / "FG-IR-26-180.json"
+    path.write_text(json.dumps(FORTI_CSAF))
+    _, [v] = FortinetAdapter(connector_config(config, "fortinet")).parse_file(path)
+    assert [(p.name, p.label(), p.status) for p in v.products] == [
+        ("FortiSIEM", "7.5.0", KNOWN_AFFECTED),
+        ("FortiSIEM", "vers:generic/>=7.6|<7.7", KNOWN_NOT_AFFECTED)]
+
+
+def test_fortinet_csaf_cpe_has_plain_version(config, tmp_path):
+    from advisory_cpe_generator.enricher import CpeEnricher
+    path = tmp_path / "FG-IR-26-180.json"
+    path.write_text(json.dumps(FORTI_CSAF))
+    _, [v] = FortinetAdapter(connector_config(config, "fortinet")).parse_file(path)
+    CpeEnricher(config, dictionary=False, mapping={
+        ("fortinet", "fortisiem"): ("a", "fortinet", "fortisiem")}).enrich(v)
+    assert {p.vendor for p in v.products} == {"Fortinet"}          # not "Fortinet PSIRT"
+    assert v.products[0].cpe == "cpe:2.3:a:fortinet:fortisiem:7.5.0:*:*:*:*:*:*:*"
+    assert v.products[1].cpe == "cpe:2.3:a:fortinet:fortisiem:*:*:*:*:*:*:*:*"

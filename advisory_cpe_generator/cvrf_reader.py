@@ -23,7 +23,7 @@ none read the same. Branch types map to the CSAF categories of the same name
 
 import xml.etree.ElementTree as ET
 
-from .csaf_reader import _STATUS, _VERSION_CATEGORIES, _version_text
+from .csaf_reader import _STATUS, _VERSION_CATEGORIES, _branch_range, _version_text
 from .model import Note, Product, Reference, Remediation, Score, Vulnerability
 
 
@@ -97,7 +97,9 @@ def _product(full, path, default_vendor):
         category, value = version
         value = _version_text(value, name)
         if category == "product_version_range":
-            p.raw_range = value
+            p.version_range = _branch_range(value)
+            if not p.version_range:
+                p.raw_range = value
         else:
             p.version = value
     return p
