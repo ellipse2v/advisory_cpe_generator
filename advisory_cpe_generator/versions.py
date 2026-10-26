@@ -36,6 +36,13 @@ def compare(a, b):
     return (ka > kb) - (ka < kb)
 
 
+def next_branch(branch):
+    """'6.0' -> '6.1': the first version after a whole branch."""
+    parts = branch.split(".")
+    parts[-1] = str(int(parts[-1]) + 1)
+    return ".".join(parts)
+
+
 @dataclass
 class VersionRange:
     """

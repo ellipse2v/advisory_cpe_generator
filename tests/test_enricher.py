@@ -183,3 +183,11 @@ def test_range_cpe_can_be_turned_off(config):
     rng = Product("Stormshield", "Netasq", version_range=VersionRange(introduced="9.0.0"))
     CpeEnricher(config, dictionary=False, mapping={}).enrich(_vuln(rng))
     assert rng.cpe is None
+
+
+def test_software_preferred_over_hardware_cpe(config):
+    nvd = FakeDictionary(["cpe:2.3:a:fortinet:fortiadc:7.4.0:*:*:*:*:*:*:*",
+                          "cpe:2.3:h:fortinet:fortiadc:-:*:*:*:*:*:*:*"])
+    p = Product("Fortinet", "FortiADC", version="7.4.1")
+    CpeEnricher(config, dictionary=nvd, mapping={}).enrich(_vuln(p))
+    assert p.cpe == "cpe:2.3:a:fortinet:fortiadc:7.4.1:*:*:*:*:*:*:*"

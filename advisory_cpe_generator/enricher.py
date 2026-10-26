@@ -338,6 +338,10 @@ class CpeEnricher:
         dictionary = self.dictionary
         if dictionary:
             keys = dictionary.identify(product.vendor, product.name)
+            software = [k for k in keys if k[0] != "h"]
+            if len(keys) > 1 and len({k[1:] for k in keys}) == 1 and len(software) == 1:
+                # Same product as software and as hardware (FortiADC): advisories version the software.
+                keys = software
             if len(keys) == 1:
                 key = keys[0]
                 return "nvd-dictionary", (lambda v: dictionary.resolve(key, v)), key

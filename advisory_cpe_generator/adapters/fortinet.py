@@ -49,7 +49,7 @@ from ..csaf_reader import parse_csaf
 from ..cvrf_reader import parse_cvrf
 from ..model import (FIXED, KNOWN_AFFECTED, KNOWN_NOT_AFFECTED, Note, Product, Reference, Remediation,
                      Score, Vulnerability)
-from ..versions import VersionRange
+from ..versions import VersionRange, next_branch as _next_branch
 from .base import Adapter, AdvisoryRef
 
 _ID = re.compile(r"FG-IR-\d{2}-\d+", re.I)
@@ -62,13 +62,6 @@ _BRANCH = re.compile(r"^(.*?)\s+(\d+(?:\.\d+)*)$")
 _VECTOR = re.compile(r"CVSS:3\.[01]/[A-Za-z]{1,3}:[A-Za-z](?:/[A-Za-z]{1,3}:[A-Za-z])+")
 _CVE = re.compile(r"CVE-\d{4}-\d{4,7}", re.I)
 _EXTENSIONS = {"csaf": "json", "html": "html", "cvrf": "xml"}
-
-
-def _next_branch(branch):
-    """'6.0' -> '6.1': the first version after a whole branch."""
-    parts = branch.split(".")
-    parts[-1] = str(int(parts[-1]) + 1)
-    return ".".join(parts)
 
 
 def _date(text):
@@ -193,7 +186,13 @@ class FortinetAdapter(Adapter):
             data = fh.read()
         suffix = str(path).lower().rsplit(".", 1)[-1]
         if suffix == "json":
-            return parse_csaf(json.loads(data), self.vendor, self.vendor_name)
+            adv_id, vulns = parse_csaf(json.loads(data), self.vendor, self.vendor_name)
+            for v in vulns:
+                for p in v.products:
+                    # Fortinet's CSAF names the vendor branch "Fortinet PSIRT" (the team, not the vendor).
+                    if p.vendor.lower().startswith("fortinet"):
+                        p.vendor = self.vendor_name
+            return adv_id, vulns
         if suffix in ("html", "htm"):
             match = _ID.search(Path(path).name)
             return self.parse_page(data, match.group(0).upper() if match else Path(path).stem,
