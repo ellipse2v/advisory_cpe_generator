@@ -17,6 +17,7 @@ from advisory_cpe_generator import csaf_writer
 from advisory_cpe_generator.adapters import (CiscoAdapter, FortinetAdapter, OracleAdapter, PaloAltoAdapter,
                                              StormshieldAdapter)
 from advisory_cpe_generator.config import connector_config
+from advisory_cpe_generator.csaf_reader import parse_csaf
 from advisory_cpe_generator.enricher import CpeEnricher
 from advisory_cpe_generator.model import Product, Vulnerability, merge_by_cve
 from advisory_cpe_generator.storage import Storage
@@ -136,3 +137,41 @@ def test_scores_and_remediations_per_product(config):
     fix = next(r for r in vuln["remediations"] if r["category"] == "vendor_fix")
     assert [names[pid] for pid in fix["product_ids"]] == ["Stormshield Endpoint Security 6.0.15",
                                                           "Stormshield Endpoint Security 7.1.02"]
+
+
+def test_scores_keep_their_products_from_a_vendor_csaf(config):
+    # Oracle's CPU: one CVE, a "Security-in-Depth" 0.0 score for some products, a real one for others.
+    def product(pid, name):
+        return {"category": "product_name", "name": name,
+                "branches": [{"category": "product_version", "name": "1.0",
+                              "product": {"product_id": pid, "name": f"{name} 1.0"}}]}
+
+    def score(pids, vector, base):
+        return {"products": pids, "cvss_v3": {"version": "3.1", "vectorString": vector, "baseScore": base}}
+
+    source = {
+        "document": {"tracking": {"id": "CPUJan2026csaf"}},
+        "product_tree": {"branches": [{"category": "vendor", "name": "Oracle", "branches": [
+            product("P1", "Oracle SQL Developer"), product("P2", "Oracle Retail Xstore Point of Service")]}]},
+        "vulnerabilities": [{
+            "cve": "CVE-2022-42889",
+            "product_status": {"known_affected": ["P1", "P2"]},
+            "scores": [score(["P1"], "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N", 0.0),
+                       score(["P2"], "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H", 9.8)]}]}
+    [v] = parse_csaf(source, "oracle", "Oracle")[1]
+    doc = csaf_writer.build_document(v, config, {"id": "x", "status": "final", "version": "1",
+                                     "initial_release_date": "2026-01-01T00:00:00Z",
+                                     "current_release_date": "2026-01-01T00:00:00Z",
+                                     "revision_history": [{"number": "1", "date": "2026-01-01T00:00:00Z",
+                                                           "summary": "x"}]})
+    names = {}
+
+    def walk(branches):
+        for b in branches:
+            if "product" in b:
+                names[b["product"]["product_id"]] = b["product"]["name"]
+            walk(b.get("branches", []))
+    walk(doc["product_tree"]["branches"])
+    assert sorted(([names[pid] for pid in s["products"]], s["cvss_v3"]["baseScore"])
+                  for s in doc["vulnerabilities"][0]["scores"]) == [
+        (["Oracle Retail Xstore Point of Service 1.0"], 9.8), (["Oracle SQL Developer 1.0"], 0.0)]

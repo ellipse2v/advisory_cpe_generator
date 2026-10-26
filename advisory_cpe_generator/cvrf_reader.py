@@ -154,10 +154,14 @@ def parse_cvrf(data, vendor, vendor_name):
                 vec, score = _text(s, vector), _text(s, base)
                 if not vec or score is None:
                     continue
+                # Each score set applies to its own products, as in csaf_reader.
+                names = list(dict.fromkeys(catalog[pid].name for pid in
+                                           ((p.text or "").strip() for p in _children(s, "ProductID"))
+                                           if pid in catalog))
                 if vec.startswith("CVSS:3."):
-                    vuln.scores.append(Score(vec.split("/", 1)[0][5:], vec, float(score)))
+                    vuln.scores.append(Score(vec.split("/", 1)[0][5:], vec, float(score), names))
                 elif name == "ScoreSetV2":
-                    vuln.scores.append(Score("2.0", vec, float(score)))
+                    vuln.scores.append(Score("2.0", vec, float(score), names))
         rems = _child(v, "Remediations")
         for r in _children(rems, "Remediation") if rems is not None else []:
             details = _text(r, "Description")

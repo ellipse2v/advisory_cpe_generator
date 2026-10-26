@@ -186,7 +186,11 @@ def test_cvrf_matches_csaf_of_same_advisory(config):
     assert {p.name for p in from_cvrf.products} == {p.name for p in from_csaf.products}
     common = {(p.name, p.version) for p in from_cvrf.products} & {(p.name, p.version) for p in from_csaf.products}
     assert ("IOS", "12.2(55)SE") in common and len(common) > 150
-    assert from_cvrf.scores[0] == from_csaf.scores[0]
+    # The CSAF names the products of its score, the CVRF doesn't: same score all the same
+    assert from_cvrf.scores[0].product_names == []
+    assert {"IOS", "Cisco IOS XE Software"} == set(from_csaf.scores[0].product_names)
+    assert (from_cvrf.scores[0].vector, from_cvrf.scores[0].base_score) == (
+        from_csaf.scores[0].vector, from_csaf.scores[0].base_score)
     assert from_cvrf.remediations[0].category == "workaround"
 
 

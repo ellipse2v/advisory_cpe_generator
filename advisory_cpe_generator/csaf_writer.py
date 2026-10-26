@@ -128,7 +128,10 @@ def build_document(vuln, config, tracking):
             if not pids:
                 continue
             key, body = _cvss(score)
-            scores.setdefault(tuple(pids), {}).setdefault(key, body)
+            same_products = scores.setdefault(tuple(pids), {})
+            # Two scores for the same products (e.g. two components of one Oracle product): the highest.
+            if key not in same_products or body["baseScore"] > same_products[key]["baseScore"]:
+                same_products[key] = body
         if scores:
             v["scores"] = [{"products": list(pids), **body} for pids, body in scores.items()]
     remediations = []

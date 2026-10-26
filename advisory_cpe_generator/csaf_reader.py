@@ -136,10 +136,13 @@ def parse_csaf(doc, vendor, vendor_name):
         for n in v.get("notes", []):
             vuln.notes.append(Note(n["category"], n["text"], n.get("title")))
         for s in v.get("scores", []):
+            # Each score applies to its own products (Oracle's CPU: 0.0 for the products a CVE
+            # can't be exploited in, the real score for the others).
+            names = list(dict.fromkeys(catalog[pid].name for pid in s.get("products", []) if pid in catalog))
             for key in ("cvss_v3", "cvss_v2"):
                 c = s.get(key)
                 if c and c.get("vectorString"):
-                    vuln.scores.append(Score(c["version"], c["vectorString"], float(c["baseScore"])))
+                    vuln.scores.append(Score(c["version"], c["vectorString"], float(c["baseScore"]), names))
         for r in v.get("remediations", []):
             keys = [by_pid[pid].key() for pid in r.get("product_ids", []) if pid in by_pid]
             vuln.remediations.append(Remediation(r["category"], r["details"], r.get("url"), keys))
